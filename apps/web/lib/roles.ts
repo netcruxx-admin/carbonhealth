@@ -60,6 +60,7 @@ export const nurseRole = 'nurse';
 export const labRole = 'lab';
 export const patientRole = 'patient';
 export const pharmacistRole = 'pharmacist';
+export const receptionistRole = 'receptionist';
 
 /** Roles the product ships with. The backend refuses to delete these, and the
  *  Roles screen greys out their delete buttons to match. */
@@ -71,11 +72,12 @@ export const builtInRoleCodes = [
   labRole,
   patientRole,
   pharmacistRole,
+  receptionistRole,
 ];
 
 /** Tabs on the login form — roles with a self-service sign-in path. Not the set
  *  of valid roles: anyone holding a runtime-created role signs in without a tab. */
-export const loginRoleTabs = [patientRole, doctorRole, adminRole, labRole, nurseRole, pharmacistRole];
+export const loginRoleTabs = [patientRole, doctorRole, adminRole, labRole, nurseRole, pharmacistRole, receptionistRole];
 
 /** Sidebar heading per role. Falls back to a generic title for custom roles. */
 export const portalTitles: Record<string, string> = {
@@ -86,6 +88,7 @@ export const portalTitles: Record<string, string> = {
   [labRole]: 'Laboratory',
   [patientRole]: 'Patient Portal',
   [pharmacistRole]: 'Pharmacy',
+  [receptionistRole]: 'Front Desk',
 };
 export const fallbackPortalTitle = 'Dashboard';
 
@@ -166,10 +169,10 @@ export interface DashboardRoute {
 }
 
 /** Hospital staff who work with patient records. */
-export const staffRoles = [adminRole, doctorRole, nurseRole];
+export const staffRoles = [adminRole, doctorRole, nurseRole, receptionistRole];
 /** Staff who deliver care directly and share the same profile form. */
 export const clinicalRoles = [doctorRole, nurseRole];
-const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, patientRole, pharmacistRole];
+const allRoles = [superadminRole, adminRole, doctorRole, nurseRole, labRole, patientRole, pharmacistRole, receptionistRole];
 
 /**
  * Every dashboard route, once.
@@ -398,7 +401,7 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/profile',
     label: 'Profile',
     icon: User,
-    viewRoles: [...clinicalRoles, labRole, pharmacistRole, patientRole],
+    viewRoles: [...clinicalRoles, labRole, pharmacistRole, receptionistRole, patientRole],
     permission: 'profile.manage',
     viewRolesOnly: true,
   },
