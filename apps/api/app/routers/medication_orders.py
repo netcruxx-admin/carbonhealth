@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
-from .. import models, schemas
+from .. import models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, require_permission
 from ..database import get_db
@@ -190,6 +190,7 @@ def dispense_order(
                 f"Only {med.stock} in stock — this order needs {wanted}. "
                 "Restock before dispensing.",
             )
+        stock_before = med.stock
         med.stock -= wanted
         db.add(
             models.InventoryMovement(
@@ -203,12 +204,36 @@ def dispense_order(
                 created_at=now_iso(),
             )
         )
+        # Fires once, on the dispense that pushes stock from above the reorder
+        # level to at-or-below it — not on every subsequent dispense while it
+        # stays low, which would just be noise for the same shortage.
+        crossed_low_stock = stock_before > med.reorder_level >= med.stock
+    else:
+        crossed_low_stock = False
 
     # Set last, so a refusal above leaves the order pending and dispensable
     # once the shelf is restocked.
     order.status = "dispensed"
     db.commit()
     db.refresh(order)
+
+    notify.notify_patient(
+        db, tenant_id, order.patient_id,
+        title="Medicine ready",
+        body=(
+            f"{order.medicine_name} is ready for pickup."
+            if order.medicine_name else
+            "Your medicine order is ready for pickup."
+        ),
+        data={"type": "medication_order", "orderId": order.id},
+    )
+    if crossed_low_stock:
+        notify.notify_role(
+            db, tenant_id, "pharmacist",
+            title="Low stock",
+            body=f"{med.name} is down to {med.stock} unit(s) (reorder level {med.reorder_level}).",
+            data={"type": "low_stock", "medicineId": med.id, "url": "/dashboard/inventory"},
+        )
     return _enrich(db, tenant_id, order)
 
 
@@ -241,6 +266,17 @@ def administer_order(
         order.notes = " | ".join(parts)
     db.commit()
     db.refresh(order)
+
+    notify.notify_doctor(
+        db, tenant_id, order.doctor_id,
+        title="Medication administered",
+        body=(
+            f"{order.medicine_name} was administered to your patient."
+            if order.medicine_name else
+            "A medication order you placed was administered."
+        ),
+        data={"type": "medication_order", "orderId": order.id, "url": "/dashboard/medication-orders"},
+    )
     return _enrich(db, tenant_id, order)
 
 

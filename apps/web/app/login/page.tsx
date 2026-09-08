@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useFormik, FormikProvider } from 'formik';
@@ -49,7 +49,16 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const justRegistered = searchParams.get('registered') === '1';
   const justReset = searchParams.get('reset') === '1';
-  const isHospitalSubdomain = !!currentSubdomain();
+  // currentSubdomain() reads window.location and is null during SSR by
+  // design (see tenant.ts) — computing it straight in render would make the
+  // server's "no subdomain" answer disagree with the client's real one on the
+  // very first paint. Resolving it after mount keeps the hydrated output
+  // matching the server, at the cost of one frame as a platform login before
+  // it settles on a hospital subdomain.
+  const [isHospitalSubdomain, setIsHospitalSubdomain] = useState(false);
+  useEffect(() => {
+    setIsHospitalSubdomain(!!currentSubdomain());
+  }, []);
   const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
   const [loginMutation, { isLoading }] = useLoginMutation();
   const [error, setError] = useState('');

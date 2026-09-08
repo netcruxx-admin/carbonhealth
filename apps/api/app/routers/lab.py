@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session, aliased
 
-from .. import models, schemas
+from .. import models, notify, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_doctor_id, caller_patient_id, own_record_filter, require_permission
 from ..database import get_db
@@ -127,6 +127,18 @@ def create_test_order(
     db.add(order)
     db.commit()
     db.refresh(order)
+
+    pat_name = patient_display(db, [order.patient_id], tenant_id).get(order.patient_id, ("", ""))[0]
+    notify.notify_role(
+        db, tenant_id, "lab",
+        title="New lab order",
+        body=(
+            f"A new test order was placed for {pat_name}."
+            if pat_name else
+            "A new test order was placed."
+        ),
+        data={"type": "lab_order", "orderId": order.id, "url": "/dashboard/lab-orders"},
+    )
     return order
 
 
@@ -160,11 +172,26 @@ def update_test_order(
     tenant_id: str = Depends(get_tenant_id),
 ):
     order = _get_order(db, order_id, tenant_id)
+    was_completed = order.status == "completed"
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(order, field, value)
     order.updated_at = now_iso()
     db.commit()
     db.refresh(order)
+
+    if order.status == "completed" and not was_completed:
+        notify.notify_patient(
+            db, tenant_id, order.patient_id,
+            title="Lab report ready",
+            body="Your test results are ready to view.",
+            data={"type": "lab_result", "orderId": order.id, "url": "/dashboard/reports"},
+        )
+        notify.notify_doctor(
+            db, tenant_id, order.doctor_id,
+            title="Lab report ready",
+            body="A test report you ordered is ready for review.",
+            data={"type": "lab_result", "orderId": order.id, "url": "/dashboard/lab-orders"},
+        )
     return order
 
 
@@ -196,6 +223,13 @@ def review_test_order(
     order.updated_at = now_iso()
     db.commit()
     db.refresh(order)
+
+    notify.notify_patient(
+        db, tenant_id, order.patient_id,
+        title="Lab report reviewed",
+        body="Your doctor has reviewed your test report.",
+        data={"type": "lab_result", "orderId": order.id, "url": "/dashboard/reports"},
+    )
     return order
 
 

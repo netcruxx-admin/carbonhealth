@@ -79,7 +79,7 @@ def send(
         return 0
 
     try:
-        from firebase_admin import messaging
+        from firebase_admin import exceptions as fb_exceptions, messaging
     except ImportError:
         log.warning("firebase_admin not installed — push notifications disabled.")
         return 0
@@ -87,30 +87,34 @@ def send(
     sent = 0
     stale: list[str] = []
 
+    # Deliberately a data-only message — no top-level `notification` field.
+    # When one is present, the browser auto-displays it using Firebase's own
+    # internal handling and never invokes our onBackgroundMessage handler at
+    # all, which means the notification actually shown was never the one we
+    # attached click-routing `data` to — the click then has nothing to route
+    # on. Putting title/body inside `data` instead guarantees our handler
+    # (web/public/firebase-messaging-sw.js) always runs and always has it.
     for record in tokens:
+        payload = {"title": title, "body": body, **{k: str(v) for k, v in (data or {}).items()}}
         msg = messaging.Message(
-            notification=messaging.Notification(title=title, body=body),
-            data={k: str(v) for k, v in (data or {}).items()},
+            data=payload,
             token=record.token,
-            webpush=messaging.WebpushConfig(
-                notification=messaging.WebpushNotification(
-                    title=title,
-                    body=body,
-                    icon="/logo/logo-icon.png",
-                ),
-            ),
         )
         try:
             messaging.send(msg, app=app)
             sent += 1
+        except (messaging.UnregisteredError, fb_exceptions.InvalidArgumentError):
+            # Token has been unregistered or is malformed — remove it so we
+            # stop trying to deliver to a device that has revoked permission.
+            # (These arrive as typed exceptions, not as a particular string in
+            # str(exc) — a prior version of this check matched on message
+            # text like "registration-token-not-registered", which never
+            # actually appears in firebase_admin's human-readable messages
+            # ("Device unregistered.", "The registration token is not a valid
+            # FCM registration token"), so no token was ever pruned.)
+            stale.append(record.id)
         except Exception as exc:
-            exc_str = str(exc)
-            # Token has been unregistered or is invalid — remove it so we stop
-            # trying to deliver to a device that has revoked permission.
-            if "registration-token-not-registered" in exc_str or "invalid-argument" in exc_str:
-                stale.append(record.id)
-            else:
-                log.warning("FCM send failed for token %s: %s", record.id, exc)
+            log.warning("FCM send failed for token %s: %s", record.id, exc)
 
     if stale:
         db.query(models.FcmToken).filter(models.FcmToken.id.in_(stale)).delete()
@@ -118,3 +122,66 @@ def send(
         log.info("Removed %d stale FCM token(s) for user %s", len(stale), user_id)
 
     return sent
+
+
+def notify_patient(
+    db: Session,
+    tenant_id: str,
+    patient_id: str,
+    *,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+) -> int:
+    """Push to the user account behind a patient record, scoped to the tenant."""
+    patient = (
+        db.query(models.Patient)
+        .filter(models.Patient.id == patient_id, models.Patient.hospital_id == tenant_id)
+        .first()
+    )
+    if patient is None:
+        return 0
+    return send(db, user_id=patient.user_id, title=title, body=body, data=data)
+
+
+def notify_doctor(
+    db: Session,
+    tenant_id: str,
+    doctor_id: str,
+    *,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+) -> int:
+    """Push to the user account behind a doctor record, scoped to the tenant."""
+    doctor = (
+        db.query(models.Doctor)
+        .filter(models.Doctor.id == doctor_id, models.Doctor.hospital_id == tenant_id)
+        .first()
+    )
+    if doctor is None:
+        return 0
+    return send(db, user_id=doctor.user_id, title=title, body=body, data=data)
+
+
+def notify_role(
+    db: Session,
+    tenant_id: str,
+    role_code: str,
+    *,
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+) -> int:
+    """Push to every user holding `role_code` at this hospital.
+
+    For events with no single owning patient or doctor — a stock threshold, a
+    new item landing in a shared queue — where whoever holds the relevant role
+    at this hospital should hear about it, not one specific record's people.
+    """
+    users = (
+        db.query(models.User)
+        .filter(models.User.hospital_id == tenant_id, models.User.role == role_code)
+        .all()
+    )
+    return sum(send(db, user_id=u.id, title=title, body=body, data=data) for u in users)

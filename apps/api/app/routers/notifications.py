@@ -5,6 +5,7 @@ browser.  The token is upserted so re-registering after a token rotation
 (Firebase rotates them periodically) never creates duplicates.
 """
 from fastapi import APIRouter, Depends, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -38,18 +39,37 @@ def register_token(
         # Re-associate with the current user in case a different user signed in
         # on the same device.
         existing.user_id = user.id
-    else:
-        db.add(
-            models.FcmToken(
-                id=new_id("fcm"),
-                user_id=user.id,
-                token=body.token,
-                device_label=body.device_label or "",
-                created_at=now,
-                updated_at=now,
-            )
+        db.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    db.add(
+        models.FcmToken(
+            id=new_id("fcm"),
+            user_id=user.id,
+            token=body.token,
+            device_label=body.device_label or "",
+            created_at=now,
+            updated_at=now,
         )
-    db.commit()
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two requests for the same brand-new token raced here — React's
+        # dev-mode double effect invocation fires the registering hook twice
+        # on mount, and both can see "no existing row" before either commits.
+        # The loser's insert trips the token's unique constraint; treat that
+        # exactly like finding it already existed, rather than a real error.
+        db.rollback()
+        existing = (
+            db.query(models.FcmToken)
+            .filter(models.FcmToken.token == body.token)
+            .first()
+        )
+        if existing:
+            existing.updated_at = now
+            existing.user_id = user.id
+            db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

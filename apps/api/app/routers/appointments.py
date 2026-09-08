@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, pricing, schemas
+from .. import consent as consent_lib, models, notify, pricing, schemas
 from ..auth import get_current_user
 from ..authz import (
     SCOPE_OWN,
@@ -201,6 +201,39 @@ def create_appointment(
 
     db.commit()
     db.refresh(appointment)
+
+    # Whoever placed the booking already knows — only the other party learns
+    # something from a push. A patient booking their own visit doesn't need
+    # telling; a doctor booking a follow-up for their own patient doesn't
+    # either. Staff booking on behalf of someone else are neither party, so
+    # both sides still hear about it.
+    acting_patient_id = caller_patient_id(db, user)
+    acting_doctor_id = caller_doctor_id(db, user)
+
+    doc_name = doctor_display(db, [appointment.doctor_id], tenant_id).get(appointment.doctor_id, "")
+    pat_name = patient_display(db, [appointment.patient_id], tenant_id).get(appointment.patient_id, ("", ""))[0]
+    if appointment.patient_id != acting_patient_id:
+        notify.notify_patient(
+            db, tenant_id, appointment.patient_id,
+            title="Appointment booked",
+            body=(
+                f"Your appointment with Dr. {doc_name} on {appointment.date} at {appointment.time} is confirmed."
+                if doc_name else
+                f"Your appointment on {appointment.date} at {appointment.time} is confirmed."
+            ),
+            data={"type": "appointment", "appointmentId": appointment.id, "url": "/dashboard/appointments"},
+        )
+    if appointment.doctor_id != acting_doctor_id:
+        notify.notify_doctor(
+            db, tenant_id, appointment.doctor_id,
+            title="New appointment",
+            body=(
+                f"{pat_name} booked an appointment on {appointment.date} at {appointment.time}."
+                if pat_name else
+                f"New appointment booked on {appointment.date} at {appointment.time}."
+            ),
+            data={"type": "appointment", "appointmentId": appointment.id, "url": "/dashboard/appointments"},
+        )
     return appointment
 
 
@@ -273,6 +306,7 @@ def update_appointment(
         changes.get("date", appointment.date) != appointment.date
         or changes.get("time", appointment.time) != appointment.time
     )
+    was_cancelled = appointment.status == "cancelled"
 
     for field, value in changes.items():
         setattr(appointment, field, value)
@@ -280,6 +314,52 @@ def update_appointment(
         appointment.rescheduled = True
     db.commit()
     db.refresh(appointment)
+
+    newly_cancelled = appointment.status == "cancelled" and not was_cancelled
+    if moved or newly_cancelled:
+        doc_name = doctor_display(db, [appointment.doctor_id], tenant_id).get(appointment.doctor_id, "")
+        pat_name = patient_display(db, [appointment.patient_id], tenant_id).get(appointment.patient_id, ("", ""))[0]
+        if newly_cancelled:
+            title = "Appointment cancelled"
+            patient_body = (
+                f"Your appointment with Dr. {doc_name} on {appointment.date} at {appointment.time} was cancelled."
+                if doc_name else
+                f"Your appointment on {appointment.date} at {appointment.time} was cancelled."
+            )
+            doctor_body = (
+                f"{pat_name}'s appointment on {appointment.date} at {appointment.time} was cancelled."
+                if pat_name else
+                f"An appointment on {appointment.date} at {appointment.time} was cancelled."
+            )
+        else:
+            title = "Appointment rescheduled"
+            patient_body = (
+                f"Your appointment with Dr. {doc_name} was moved to {appointment.date} at {appointment.time}."
+                if doc_name else
+                f"Your appointment was moved to {appointment.date} at {appointment.time}."
+            )
+            doctor_body = (
+                f"{pat_name}'s appointment was moved to {appointment.date} at {appointment.time}."
+                if pat_name else
+                f"An appointment was moved to {appointment.date} at {appointment.time}."
+            )
+        # The party who made this change already knows; only tell the other
+        # one. Staff acting on behalf of either party are neither, so both
+        # still hear about it.
+        acting_patient_id = caller_patient_id(db, user)
+        acting_doctor_id = caller_doctor_id(db, user)
+        if appointment.patient_id != acting_patient_id:
+            notify.notify_patient(
+                db, tenant_id, appointment.patient_id,
+                title=title, body=patient_body,
+                data={"type": "appointment", "appointmentId": appointment.id, "url": "/dashboard/appointments"},
+            )
+        if appointment.doctor_id != acting_doctor_id:
+            notify.notify_doctor(
+                db, tenant_id, appointment.doctor_id,
+                title=title, body=doctor_body,
+                data={"type": "appointment", "appointmentId": appointment.id, "url": "/dashboard/appointments"},
+            )
     return appointment
 
 
