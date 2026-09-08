@@ -42,6 +42,17 @@ export interface Patient {
   medicalHistory: string;
   insuranceProvider: string;
   insuranceNumber: string;
+  /** Twelve digits, or "" when not given. Optional by design — a hospital may
+   *  not refuse care for want of one — and validated when it is: its purpose is
+   *  recognising a returning patient, and a mistyped number recognises nobody. */
+  aadhaarNumber: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  country: string;
   documents: string[];
   /** Appointment aggregates — populated only when the list is fetched with
    *  withStats=true, so the cheap reads stay cheap. */
@@ -59,7 +70,6 @@ export interface Doctor {
   qualification: string;
   specialization: string;
   experienceYears: number;
-  consultationFee: number;
   availableSlots: TimeSlot[];
   user?: User;
   // Medical council credentials (collected at registration). Optional so
@@ -94,6 +104,9 @@ export interface Appointment {
   reason: string;
   notes: string;
   rescheduled?: boolean;
+  /** Which published price this visit is billed at — the `visitType` of a
+   *  ConsultationFee. The client names the kind of visit; the server prices it. */
+  visitType?: string;
   /** Display fields resolved server-side, so a table needn't fetch every
    *  patient and doctor just to turn ids into names. */
   patientName?: string;
@@ -101,6 +114,13 @@ export interface Appointment {
   doctorName?: string;
   /** Whether vitals have been recorded against this appointment. */
   hasVitals?: boolean;
+  /** The consultation bill for this visit, answered on the appointment so a
+   *  list can show paid/unpaid without reading the payments ledger. Empty
+   *  `paymentStatus` means no bill was raised — not the same as unpaid. */
+  paymentStatus?: string;
+  paymentAmount?: number;
+  paymentMethod?: string;
+  paymentId?: string;
   // Set when this appointment was booked as a follow-up to an earlier one.
   followUpOf?: string;
   createdAt: string;
@@ -170,6 +190,49 @@ export interface PharmacyBillingSummary {
   upiTotal: number;
   cardTotal: number;
   billCount: number;
+}
+
+export interface ConsultationBillingRow {
+  paymentId: string;
+  invoiceNumber: string;
+  createdAt: string;
+  patientName: string;
+  patientPhone: string;
+  doctorName: string;
+  departmentName: string;
+  visitType: string;
+  visitTypeLabel: string;
+  appointmentDate: string;
+  appointmentTime: string;
+  amount: number;
+  status: string;
+  paymentMethod: string;
+}
+
+export interface ConsultationBillingSummary {
+  date: string;
+  rows: ConsultationBillingRow[];
+  total: number;
+  cashTotal: number;
+  upiTotal: number;
+  cardTotal: number;
+  /** Billed but not yet collected — what the desk still has to chase. */
+  pendingTotal: number;
+  billCount: number;
+}
+
+/** What a hospital charges for a kind of visit. Price lives here, not on the
+ *  doctor: a consultation is priced by what it is, not by who gives it. */
+export interface ConsultationFee {
+  id: string;
+  hospitalId?: string;
+  /** Stable key an appointment records; survives relabelling. */
+  visitType: string;
+  label: string;
+  amount: number;
+  active: boolean;
+  sortOrder: number;
+  createdAt?: string;
 }
 
 /** Returned by POST /payments/initiate — everything needed to open Razorpay checkout. */
@@ -564,6 +627,14 @@ export interface PatientDetails {
   emergencyPhone?: string;
   insuranceProvider?: string;
   insuranceNumber?: string;
+  aadhaarNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
 }
 
 export interface DoctorDetails {
@@ -573,7 +644,6 @@ export interface DoctorDetails {
   qualification?: string;
   specialization?: string;
   experienceYears?: number;
-  consultationFee?: number;
 }
 
 export type RegisterDetails = PatientDetails | DoctorDetails;

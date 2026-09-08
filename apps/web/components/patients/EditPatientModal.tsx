@@ -4,33 +4,27 @@ import { X } from 'lucide-react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
-import { FormField } from '@/components/form/FormField';
-import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { apiError } from '@/lib/apiError';
 import { useUpdatePatientMutation } from '@/store/api';
 import type { Patient } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  PatientProfileFields,
+  patientProfilePayload,
+  patientProfileSchemaFields,
+  patientProfileValues,
+} from './patientProfile';
 
-const GENDER_OPTIONS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-];
+/**
+ * Correcting a patient record.
+ *
+ * Shows every field the two registration forms collect, because a detail
+ * gathered at one door has to be fixable from here — insurance was collected
+ * at sign-up and then unreachable, since this modal's schema had no field for
+ * it and the API's PatientUpdate did not either.
+ */
 
-const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => ({
-  value: b,
-  label: b,
-}));
-
-const editSchema = Yup.object({
-  gender: Yup.string(),
-  bloodGroup: Yup.string().max(10, 'Too long'),
-  dateOfBirth: Yup.string(),
-  emergencyContact: Yup.string().max(100, 'Too long'),
-  emergencyPhone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
-  allergies: Yup.string().max(300, 'Too long'),
-  chronicDiseases: Yup.string().max(300, 'Too long'),
-});
+const editSchema = Yup.object(patientProfileSchemaFields);
 
 interface Props {
   /** Patient to edit. Pass null to close the modal. */
@@ -48,7 +42,7 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col">
         <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-slate-900">Edit Patient</h3>
@@ -59,22 +53,14 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
           </button>
         </div>
         <Formik
-          initialValues={{
-            gender: (patient.gender ?? '').toLowerCase(),
-            bloodGroup: patient.bloodGroup ?? '',
-            dateOfBirth: patient.dateOfBirth ?? '',
-            emergencyContact: patient.emergencyContact ?? '',
-            emergencyPhone: toPhoneDigits(patient.emergencyPhone ?? ''),
-            allergies: patient.allergies ?? '',
-            chronicDiseases: patient.chronicDiseases ?? '',
-          }}
+          initialValues={patientProfileValues(patient)}
           validationSchema={editSchema}
           onSubmit={async (values, { setSubmitting, setStatus }) => {
             setStatus('');
             try {
               await updatePatient({
                 id: patient.id,
-                body: { ...values, emergencyPhone: withPrefix(values.emergencyPhone) },
+                body: patientProfilePayload(values),
                 hospitalId,
               }).unwrap();
               toast.success('Patient updated');
@@ -89,30 +75,8 @@ export function EditPatientModal({ patient, onClose, onSuccess, hospitalId }: Pr
         >
           {({ isSubmitting, status }) => (
             <Form className="flex flex-col flex-1 min-h-0">
-              <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    name="gender"
-                    label="Gender"
-                    as="select"
-                    options={GENDER_OPTIONS}
-                    placeholder="Select gender"
-                  />
-                  <FormField
-                    name="bloodGroup"
-                    label="Blood Group"
-                    as="select"
-                    options={BLOOD_GROUP_OPTIONS}
-                    placeholder="Select blood group"
-                  />
-                </div>
-                <FormField name="dateOfBirth" label="Date of Birth" type="date" />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField name="emergencyContact" label="Emergency Contact" placeholder="Contact name" />
-                  <PhoneField name="emergencyPhone" label="Emergency Phone" />
-                </div>
-                <FormField name="allergies" label="Allergies" as="textarea" placeholder="Known allergies" />
-                <FormField name="chronicDiseases" label="Chronic Diseases" as="textarea" placeholder="Chronic conditions" />
+              <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
+                <PatientProfileFields />
                 {status && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                     {status}

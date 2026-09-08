@@ -9,8 +9,10 @@ import { apiError } from '@/lib/apiError';
 import {
   useCreateAppointmentMutation,
   useListAppointmentsQuery,
+  useListConsultationFeesQuery,
   useListScheduleBlocksQuery,
 } from '@/store/api';
+import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
 
@@ -53,6 +55,11 @@ function bookedSlotsFrom(appointments: Appointment[], doctorId: string, date: st
   );
 }
 
+// The visit type a follow-up is billed at. Seeded for every hospital by
+// pricing.seed_default_fees; a hospital that retired or never priced it gets a
+// booking with no bill rather than one billed at the new-patient rate.
+const FOLLOW_UP_VISIT_TYPE = 'follow_up';
+
 // A default follow-up is a fortnight out — sensible starting point the user can change.
 function defaultFollowUpDate() {
   return toDateStr(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
@@ -72,11 +79,18 @@ export function FollowUpModal({
   const [date, setDate] = useState(defaultFollowUpDate());
   const [time, setTime] = useState('');
   const [reason, setReason] = useState(`Follow-up: ${appointment.reason || 'Consultation'}`);
+  // Counter modes only: this is booked mid-consultation, with nobody at a
+  // checkout screen. The bill is raised pending and settled at the desk.
+  const [paymentMode, setPaymentMode] = useState<CounterPaymentMode>('cash');
   const [error, setError] = useState('');
 
   const [createAppointment] = useCreateAppointmentMutation();
   const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
   const { data: blocks = [], isLoading: loadingBlocks } = useListScheduleBlocksQuery({ doctorId: appointment.doctorId });
+  // Priced as a follow-up, not as a new patient — which is what this booking
+  // used to be billed at, since it sent no visit type at all.
+  const { data: fees = [] } = useListConsultationFeesQuery(hospitalId ? { hospitalId } : undefined);
+  const followUpFee = fees.find((f) => f.visitType === FOLLOW_UP_VISIT_TYPE);
 
   const booked = bookedSlotsFrom(appointments, appointment.doctorId, date);
   const blocked = blockedSlotSet(blocks, appointment.doctorId, date, SLOTS);
@@ -97,9 +111,11 @@ export function FollowUpModal({
         date,
         time,
         status: 'scheduled',
+        visitType: FOLLOW_UP_VISIT_TYPE,
         reason: reason.trim() || 'Follow-up',
         notes: '',
         followUpOf: appointment.id,
+        paymentMode,
       }).unwrap();
       onCreated('Follow-up scheduled');
     } catch (err) {
@@ -178,6 +194,17 @@ export function FollowUpModal({
               placeholder="Reason for the follow-up visit"
             />
           </div>
+
+          <PaymentModeField
+            value={paymentMode}
+            onChange={setPaymentMode}
+            allowOnline={false}
+            note={
+              followUpFee && followUpFee.amount > 0
+                ? `₹${followUpFee.amount} (${followUpFee.label}) will be raised as a pending bill for the desk to collect.`
+                : 'No follow-up fee is configured for this hospital, so no bill will be raised.'
+            }
+          />
         </div>
 
         <div className="flex gap-3 px-6 py-4 border-t">

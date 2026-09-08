@@ -25,7 +25,15 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import get_tenant_id, scoped
-from ..utils import ListQuery, attach_users, attach_visit_stats, doctor_display, list_params, paginate
+from ..utils import (
+    ListQuery,
+    assert_aadhaar_unused,
+    attach_users,
+    attach_visit_stats,
+    doctor_display,
+    list_params,
+    paginate,
+)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -198,7 +206,13 @@ def update_patient(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
         )
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    # Editing a record onto a number another record already carries is the same
+    # duplicate as registering one, and reads the same way to the desk.
+    assert_aadhaar_unused(
+        db, tenant_id, changes.get("aadhaar_number"), exclude_patient_id=patient.id
+    )
+    for field, value in changes.items():
         setattr(patient, field, value)
     db.commit()
     db.refresh(patient)

@@ -4,15 +4,17 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { CheckCircle, AlertCircle, CreditCard } from 'lucide-react';
+import { CheckCircle, AlertCircle, CreditCard, CalendarCheck } from 'lucide-react';
 import type { Doctor, ScheduleBlock } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { fmtDate } from '@/lib/date';
 import {
+  useCreateAppointmentMutation,
   useGetDoctorAvailabilityQuery,
   useGetPatientByUserQuery,
   useInitiatePaymentMutation,
   useListDepartmentsQuery,
+  useListConsultationFeesQuery,
   useListDoctorsQuery,
   useListScheduleBlocksQuery,
   useVerifyPaymentMutation,
@@ -24,6 +26,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -149,7 +152,7 @@ const bookingSchema = Yup.object({
   reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
-const initialValues = { department: '', date: '', time: '', reason: '' };
+const initialValues = { department: '', date: '', time: '', visitType: 'new', reason: '' };
 
 export function PatientBook({ session }: RoleViewProps) {
   const router = useRouter();
@@ -157,11 +160,17 @@ export function PatientBook({ session }: RoleViewProps) {
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initiating' | 'checkout' | 'verifying'>('idle');
+  // Paying online is the default for a patient booking themselves in; the
+  // counter modes are for the patient who would rather pay at the desk, and
+  // leave a pending bill for the desk to settle when they arrive.
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('online');
   const [selection, setSelection] = useState({ department: '', date: '' });
 
   const { data: departments = [], isLoading: loadingDepartments } = useListDepartmentsQuery();
   const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
+  const { data: fees = [] } = useListConsultationFeesQuery();
   const { data: patient, isLoading: loadingPatient } = useGetPatientByUserQuery(session.user.id);
+  const [createAppointment] = useCreateAppointmentMutation();
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
   const { slots: SLOTS, breakSlots } = useHospitalSlots();
@@ -241,7 +250,11 @@ export function PatientBook({ session }: RoleViewProps) {
           {success && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <p className="text-green-700">Payment successful! Appointment booked. Redirecting…</p>
+              <p className="text-green-700">
+                {isCounterMode(paymentMode)
+                  ? 'Appointment booked! Please pay at the counter. Redirecting…'
+                  : 'Payment successful! Appointment booked. Redirecting…'}
+              </p>
             </div>
           )}
 
@@ -270,12 +283,34 @@ export function PatientBook({ session }: RoleViewProps) {
                   return;
                 }
 
+                // ── Paying at the desk: book now, the server raises the
+                //    pending bill with it. No checkout to run and nothing for
+                //    the patient to pay before arriving.
+                if (isCounterMode(paymentMode)) {
+                  await createAppointment({
+                    patientId: patient.id,
+                    doctorId,
+                    departmentId: values.department,
+                    date: values.date,
+                    time: values.time,
+                    status: 'scheduled',
+                    visitType: values.visitType,
+                    reason: values.reason,
+                    notes: '',
+                    paymentMode,
+                  }).unwrap();
+                  setSuccess(true);
+                  setTimeout(() => router.push('/dashboard'), 2000);
+                  return;
+                }
+
                 // ── Step 1: create a Razorpay order server-side ──────────────
                 setPaymentStatus('initiating');
                 const orderData = await initiatePayment({
                   doctorId,
                   patientId: patient.id,
                   departmentId: values.department,
+                  visitType: values.visitType,
                   date: values.date,
                   time: values.time,
                   reason: values.reason,
@@ -317,6 +352,7 @@ export function PatientBook({ session }: RoleViewProps) {
                           doctorId,
                           patientId: patient.id,
                           departmentId: values.department,
+                          visitType: values.visitType,
                           date: values.date,
                           time: values.time,
                           reason: values.reason,
@@ -340,7 +376,14 @@ export function PatientBook({ session }: RoleViewProps) {
                 setTimeout(() => router.push('/dashboard'), 2000);
               } catch (err) {
                 setPaymentStatus('idle');
-                setSubmitError(apiError(err, 'Payment failed. Please try again.'));
+                setSubmitError(
+                  apiError(
+                    err,
+                    isCounterMode(paymentMode)
+                      ? 'Could not book the appointment. Please try again.'
+                      : 'Payment failed. Please try again.',
+                  ),
+                );
               }
             }}
           >
@@ -354,35 +397,20 @@ export function PatientBook({ session }: RoleViewProps) {
                 return doc?.user?.name ? `Dr. ${doc.user.name}` : null;
               })();
 
-              // Consultation fee for the assigned doctor (exact once slot is chosen).
-              const consultationFee = (() => {
-                if (values.time && values.date) {
-                  const docId = pickLeastBusy(values.time, values.date, deptDoctors, allAv, SLOTS);
-                  const fee = doctors.find((d) => d.id === docId)?.consultationFee;
-                  return fee != null ? fee : null;
-                }
-                const fees = deptDoctors
-                  .map((d) => d.consultationFee)
-                  .filter((f): f is number => f != null);
-                return fees.length > 0 ? fees : null;
-              })();
-
-              const feeDisplay = (() => {
-                if (consultationFee === null) return '—';
-                if (Array.isArray(consultationFee)) {
-                  const min = Math.min(...consultationFee);
-                  const max = Math.max(...consultationFee);
-                  return min === max ? `₹${min}` : `₹${min}–₹${max}`;
-                }
-                return `₹${consultationFee}`;
-              })();
+              // One price per kind of visit, so there is no range to show and
+              // nothing to resolve per doctor: the hospital publishes the fee
+              // and it is the same whoever the patient is seen by.
+              const selectedFee = fees.find((f) => f.visitType === values.visitType);
+              const consultationFee = selectedFee?.amount ?? null;
+              const feeDisplay = consultationFee != null ? `₹${consultationFee}` : '—';
 
               // Label for the pay button based on current payment flow stage.
               const payBtnContent = (() => {
                 if (paymentStatus === 'initiating') return <Spinner size="sm" label="Preparing payment…" />;
                 if (paymentStatus === 'checkout') return <Spinner size="sm" label="Opening checkout…" />;
                 if (paymentStatus === 'verifying') return <Spinner size="sm" label="Confirming payment…" />;
-                return <><CreditCard className="w-4 h-4" /> Pay {typeof consultationFee === 'number' ? `₹${consultationFee}` : ''} &amp; Book</>;
+                if (isCounterMode(paymentMode)) return <><CalendarCheck className="w-4 h-4" /> Book Appointment</>;
+                return <><CreditCard className="w-4 h-4" /> Pay {consultationFee != null ? `₹${consultationFee}` : ''} &amp; Book</>;
               })();
 
               return (
@@ -593,14 +621,17 @@ export function PatientBook({ session }: RoleViewProps) {
                         </div>
                       </div>
 
-                      {/* Payment notice */}
-                      <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                        <CreditCard className="w-4 h-4 shrink-0 mt-0.5" />
-                        <span>
-                          You will be redirected to a secure payment page. The appointment is confirmed
-                          only after the payment is successful.
-                        </span>
-                      </div>
+                      {/* How the patient wants to pay */}
+                      <PaymentModeField
+                        value={paymentMode}
+                        onChange={setPaymentMode}
+                        disabled={paymentStatus !== 'idle'}
+                        note={
+                          isCounterMode(paymentMode)
+                            ? 'Your slot is held and the fee is due at the hospital counter before your consultation.'
+                            : 'You will be redirected to a secure payment page. The appointment is confirmed only after the payment is successful.'
+                        }
+                      />
 
                       <div className="flex gap-3">
                         <button

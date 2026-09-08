@@ -9,6 +9,7 @@ import {
   useBookVideoSlotMutation,
   useGetPatientByUserQuery,
   useInitiatePaymentMutation,
+  useListConsultationFeesQuery,
   useListDoctorsQuery,
   useListVideoSlotsQuery,
   useVerifyPaymentMutation,
@@ -46,6 +47,13 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
   const patientId = patient?.id ?? '';
 
   const { data: allDoctors = [] } = useListDoctorsQuery();
+  // A teleconsultation is priced from the same schedule as an in-person one.
+  // The flow does not ask which kind of visit it is, so it books at the
+  // hospital's first published price — the same one the desk would quote.
+  const { data: fees = [] } = useListConsultationFeesQuery();
+  const defaultFee = fees[0];
+  const videoVisitType = defaultFee?.visitType ?? 'new';
+  const videoFee = defaultFee?.amount ?? 0;
   const doctors = allDoctors
     .filter((d) => d.verificationStatus !== 'rejected')
     .map((d) => ({
@@ -53,7 +61,6 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
       name: d.user?.name ?? 'Doctor',
       specialization: d.specialization,
       departmentId: d.departmentId ?? '',
-      fee: d.consultationFee,
     }));
 
   const { data: openSlots = [], isLoading: loadingSlots } = useListVideoSlotsQuery(
@@ -119,6 +126,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
         patientId,
         doctorId: slot.doctorId,
         departmentId,
+        visitType: videoVisitType,
         date: slot.date,
         time: slot.time,
         mode: 'video',
@@ -157,6 +165,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
                 patientId,
                 doctorId: slot.doctorId,
                 departmentId,
+                visitType: videoVisitType,
                 date: slot.date,
                 time: slot.time,
                 mode: 'video',
@@ -247,7 +256,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
                   <Stethoscope className="w-4 h-4 text-cyan-600" /> Dr. {d.name}
                 </p>
                 <p className="text-xs text-slate-500 mt-0.5">{d.specialization}</p>
-                <p className="text-xs text-slate-600 mt-1">₹{d.fee} consultation</p>
+                <p className="text-xs text-slate-600 mt-1">₹{videoFee} consultation</p>
               </button>
             );
           })}
@@ -315,7 +324,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               <Row label="Doctor" value={`Dr. ${doctorById.get(confirm.doctorId)?.name ?? ''}`} />
               <Row label="Date" value={new Date(confirm.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} />
               <Row label="Time" value={confirm.time} />
-              <Row label="Fee" value={`₹${doctorById.get(confirm.doctorId)?.fee ?? 0}`} />
+              <Row label="Fee" value={`₹${videoFee}`} />
             </div>
             {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
             <button
@@ -323,7 +332,7 @@ export function PatientVideoConsult({ session }: RoleViewProps) {
               disabled={booking}
               className="inline-flex items-center justify-center gap-2 mt-5 w-full py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold text-sm disabled:opacity-50"
             >
-              {booking ? <Spinner size="sm" label="Processing…" /> : `Pay ₹${doctorById.get(confirm.doctorId)?.fee ?? 0} & Book`}
+              {booking ? <Spinner size="sm" label="Processing…" /> : `Pay ₹${videoFee} & Book`}
             </button>
             <p className="text-xs text-slate-400 text-center mt-2">Secured by Razorpay. Slot is confirmed only after payment.</p>
           </div>

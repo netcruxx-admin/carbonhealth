@@ -17,7 +17,15 @@ from ..auth import get_current_user, hash_password
 from ..authz import SCOPE_OWN, require_any_permission, require_permission
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
-from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
+from ..utils import (
+    ListQuery,
+    assert_aadhaar_unused,
+    list_params,
+    new_id,
+    now_iso,
+    paginate,
+    text_search,
+)
 
 # Ambiguous characters are left out on purpose: this password gets read aloud
 # across a reception desk or written on a slip, and "was that a 1 or an l?" is a
@@ -162,16 +170,18 @@ def create_user(
     # Roles with a clinical profile get the linked row created alongside, so the
     # account is usable immediately.
     if body.role == "patient":
+        assert_aadhaar_unused(db, tenant_id, body.aadhaar_number)
         db.add(
             models.Patient(
                 id=new_id("pat"),
                 hospital_id=tenant_id,
                 user_id=user.id,
                 phone=body.phone,
-                gender=body.gender or "",
-                blood_group=body.blood_group or "",
-                date_of_birth=body.date_of_birth or "",
                 documents=[],
+                # The whole record, not the three fields this endpoint used to
+                # accept — the rest were uncollectable until someone opened the
+                # edit modal, and half of them were not there either.
+                **body.patient_record_values(),
             )
         )
     elif body.role == "doctor":
@@ -184,7 +194,6 @@ def create_user(
                 specialization=body.specialization or "",
                 qualification=body.qualification or "",
                 experience_years=body.experience_years or 0,
-                consultation_fee=body.consultation_fee or 0,
                 available_slots=[],
                 # Created by hospital staff, so the hospital has vouched for them.
                 verification_status="verified",

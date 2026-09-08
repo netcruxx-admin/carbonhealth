@@ -16,7 +16,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from . import models
+from . import models, pricing
 from .auth import hash_password
 from .categories import get_template
 from .utils import new_id, now_iso
@@ -118,6 +118,12 @@ def provision_hospital(
                 description=(dept.get("description") or "").strip(),
             )
         )
+
+    # The standard visit types, unpriced. A hospital that has not set its prices
+    # yet is a hospital mid-onboarding, not a hospital giving consultations
+    # away: pricing.fee_for refuses a zero rather than billing one. Seeding the
+    # rows means the admin edits three amounts instead of inventing a schedule.
+    pricing.seed_default_fees(db, hid)
 
     # A profile row always exists, even when nothing was supplied. The settings
     # screen and whatever prints a letterhead then read one shape instead of

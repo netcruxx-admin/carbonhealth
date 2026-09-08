@@ -4,16 +4,16 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { CheckCircle, AlertCircle, Banknote, CreditCard } from 'lucide-react';
-import type { Doctor } from '@/lib/types';
+import { CheckCircle, AlertCircle } from 'lucide-react';
+import type { ConsultationFee, Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useHospitalSlots } from '@/hooks/useBreakSlots';
 import {
   useCreateAppointmentMutation,
-  useCreatePaymentMutation,
   useGetDoctorAvailabilityQuery,
   useInitiatePaymentMutation,
+  useListConsultationFeesQuery,
   useListDoctorsQuery,
   useListPatientsQuery,
   useVerifyPaymentMutation,
@@ -23,6 +23,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { PaymentModeField, isCounterMode, type PaymentMode } from '@/components/payments/PaymentModeField';
 
 // ---------------------------------------------------------------------------
 // Razorpay script loader (same helper as PatientBook)
@@ -86,8 +87,13 @@ function departmentForDoctor(doctors: Doctor[], doctorId: string) {
   return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
-function feeForDoctor(doctors: Doctor[], doctorId: string): number {
-  return doctors.find((d) => d.id === doctorId)?.consultationFee ?? 0;
+/** What this visit costs, from the hospital's published price list.
+ *
+ *  Only ever used for display and for the pending cash record: the server
+ *  re-prices every online booking from the same schedule, so a number tampered
+ *  with here buys nothing. */
+function feeForVisitType(fees: ConsultationFee[], visitType: string): number {
+  return fees.find((f) => f.visitType === visitType)?.amount ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +105,7 @@ const bookingSchema = Yup.object({
   doctorId: Yup.string().required('Select a doctor'),
   date: Yup.string().required('Pick a date'),
   time: Yup.string().required('Select a time slot'),
+  visitType: Yup.string().required('Select a visit type'),
   reason: Yup.string().trim().required('Tell us why the appointment is needed'),
 });
 
@@ -111,13 +118,13 @@ function AdminBookForm({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'online'>('cash');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('cash');
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'initiating' | 'checkout' | 'verifying'>('idle');
 
   const { data: patients = [], isLoading: loadingPatients } = useListPatientsQuery();
   const { data: doctors = [], isLoading: loadingDoctors } = useListDoctorsQuery();
+  const { data: fees = [] } = useListConsultationFeesQuery();
   const [createAppointment] = useCreateAppointmentMutation();
-  const [createPayment] = useCreatePaymentMutation();
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
 
@@ -127,6 +134,7 @@ function AdminBookForm({ session }: RoleViewProps) {
     doctorId: searchParams.get('doctor') ?? '',
     date: searchParams.get('date') ?? '',
     time: searchParams.get('time') ?? '',
+    visitType: 'new',
     reason: '',
   };
 
@@ -189,33 +197,25 @@ function AdminBookForm({ session }: RoleViewProps) {
               }
 
               const departmentId = departmentForDoctor(doctors, values.doctorId);
-              const fee = feeForDoctor(doctors, values.doctorId);
 
               try {
-                if (paymentMode === 'cash') {
-                  // ── Cash: create appointment first, then a pending payment ──
-                  const appointment = await createAppointment({
+                if (isCounterMode(paymentMode)) {
+                  // ── Paid at the desk: one call. The server raises the pending
+                  //    payment alongside the booking, priced from the schedule —
+                  //    a second POST /payments from here would 403 for a doctor,
+                  //    who may book but holds no `payments.create`.
+                  await createAppointment({
                     patientId: values.patientId,
                     doctorId: values.doctorId,
                     departmentId,
                     date: values.date,
                     time: values.time,
                     status: 'scheduled',
+                    visitType: values.visitType,
                     reason: values.reason,
                     notes: '',
+                    paymentMode,
                   }).unwrap();
-
-                  // Record a pending cash payment. Staff collect the fee at the
-                  // counter and mark it completed via the Payments screen.
-                  if (fee > 0) {
-                    await createPayment({
-                      appointmentId: appointment.id,
-                      patientId: values.patientId,
-                      amount: fee,
-                      paymentMethod: 'cash',
-                      status: 'pending',
-                    }).unwrap();
-                  }
 
                   setSuccess(true);
                   setTimeout(() => router.push('/dashboard/appointments'), 1500);
@@ -226,6 +226,7 @@ function AdminBookForm({ session }: RoleViewProps) {
                     doctorId: values.doctorId,
                     patientId: values.patientId,
                     departmentId,
+                    visitType: values.visitType,
                     date: values.date,
                     time: values.time,
                     reason: values.reason,
@@ -268,6 +269,7 @@ function AdminBookForm({ session }: RoleViewProps) {
                             doctorId: values.doctorId,
                             patientId: values.patientId,
                             departmentId,
+                            visitType: values.visitType,
                             date: values.date,
                             time: values.time,
                             reason: values.reason,
@@ -297,14 +299,18 @@ function AdminBookForm({ session }: RoleViewProps) {
             }}
           >
             {({ values, errors, touched, setFieldValue }) => {
-              const fee = feeForDoctor(doctors, values.doctorId);
+              const fee = feeForVisitType(fees, values.visitType);
+              const visitTypeOptions = fees.map((f) => ({
+                value: f.visitType,
+                label: f.amount > 0 ? `${f.label} — ₹${f.amount}` : f.label,
+              }));
 
               // Label for the submit button based on flow state.
               const submitLabel = (() => {
                 if (paymentStatus === 'initiating') return <Spinner size="sm" label="Preparing payment…" />;
                 if (paymentStatus === 'checkout') return <Spinner size="sm" label="Opening checkout…" />;
                 if (paymentStatus === 'verifying') return <Spinner size="sm" label="Confirming…" />;
-                if (paymentMode === 'cash') return 'Book Appointment';
+                if (isCounterMode(paymentMode)) return 'Book Appointment';
                 return `Pay ₹${fee} & Book`;
               })();
 
@@ -412,6 +418,16 @@ function AdminBookForm({ session }: RoleViewProps) {
                     </div>
                   </div>
 
+                  {/* What kind of visit this is — the hospital prices each one,
+                      so this is also what decides the fee. */}
+                  <FormField
+                    name="visitType"
+                    label="Visit Type"
+                    as="select"
+                    required
+                    options={visitTypeOptions}
+                  />
+
                   <FormField
                     name="reason"
                     label="Reason for Visit"
@@ -422,50 +438,17 @@ function AdminBookForm({ session }: RoleViewProps) {
                   />
 
                   {/* Payment mode selector */}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-700">Payment Mode</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('cash')}
-                        className={`flex items-center gap-2 justify-center px-4 py-3 rounded-lg border-2 transition text-sm font-medium ${
-                          paymentMode === 'cash'
-                            ? 'border-cyan-600 bg-cyan-50 text-cyan-700'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <Banknote className="w-4 h-4" />
-                        Cash at Counter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMode('online')}
-                        className={`flex items-center gap-2 justify-center px-4 py-3 rounded-lg border-2 transition text-sm font-medium ${
-                          paymentMode === 'online'
-                            ? 'border-cyan-600 bg-cyan-50 text-cyan-700'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        Online Payment
-                      </button>
-                    </div>
-                    {paymentMode === 'cash' && (
-                      <p className="text-xs text-slate-500">
-                        A pending payment record will be created. Mark it paid after collecting the fee at the counter.
-                      </p>
-                    )}
-                    {paymentMode === 'online' && (
-                      <p className="text-xs text-slate-500">
-                        A Razorpay checkout will open. The appointment is confirmed only after the payment succeeds.
-                      </p>
-                    )}
-                  </div>
+                  <PaymentModeField value={paymentMode} onChange={setPaymentMode} />
 
-                  {/* Fee display when a doctor is selected */}
-                  {values.doctorId && fee > 0 && (
+                  {/* What this visit costs, per the hospital's price list */}
+                  {fee > 0 && (
                     <div className="flex justify-between items-center bg-slate-50 rounded-lg px-4 py-3 text-sm">
-                      <span className="text-slate-600">Consultation Fee</span>
+                      <span className="text-slate-600">
+                        Consultation Fee
+                        <span className="text-slate-400 ml-1">
+                          ({fees.find((f) => f.visitType === values.visitType)?.label ?? values.visitType})
+                        </span>
+                      </span>
                       <span className="font-semibold text-cyan-600">₹{fee}</span>
                     </div>
                   )}

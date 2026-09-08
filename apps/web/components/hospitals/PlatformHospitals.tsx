@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Building2, Plus, Ban, RotateCcw, Pencil, Eye } from 'lucide-react';
+import { Building2, Plus, Ban, RotateCcw, Pencil, Eye, IndianRupee, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { OnboardHospitalWizard } from '@/components/hospitals/OnboardHospitalWizard';
 import { EditHospitalWizard } from '@/components/hospitals/EditHospitalWizard';
 import { ActionIcon } from '@/components/ActionIcon';
+import { ConsultationFeesContent } from '@/components/billing/ConsultationFeesContent';
 import { RecordDialog } from '@/components/RecordDialog';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
@@ -25,6 +26,9 @@ export function PlatformHospitals({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<HospitalInfo | null>(null);
   const [toggling, setToggling] = useState<HospitalInfo | null>(null);
   const [viewing, setViewing] = useState<HospitalInfo | null>(null);
+  // Whose price list is open. A superadmin has no home tenant, so the hospital
+  // being priced has to be named explicitly rather than inferred from a token.
+  const [pricing, setPricing] = useState<HospitalInfo | null>(null);
 
   const { data: allHospitals = [], isLoading, refetch } = useListHospitalsQuery();
   const [updateHospital] = useUpdateHospitalMutation();
@@ -34,6 +38,10 @@ export function PlatformHospitals({ session }: RoleViewProps) {
     : allHospitals;
 
   const canManage = hasPermission(session, 'hospitals.manage');
+  // Held by the platform *and* by every hospital admin — what to charge is the
+  // hospital's decision, and this screen is only where the platform makes it on
+  // their behalf (a trial being set up, a hospital that asked us to).
+  const canManageFees = hasPermission(session, 'fees.manage');
 
   const confirmToggle = async () => {
     if (!toggling) return;
@@ -111,6 +119,9 @@ export function PlatformHospitals({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <ActionIcon icon={Eye} label="View" onClick={() => setViewing(h)} />
+                        {canManageFees && (
+                          <ActionIcon icon={IndianRupee} label="Consultation fees" onClick={() => setPricing(h)} />
+                        )}
                         {canManage && (
                           <>
                             <ActionIcon icon={Pencil} label="Edit" onClick={() => setEditing(h)} />
@@ -145,6 +156,26 @@ export function PlatformHospitals({ session }: RoleViewProps) {
           onClose={() => setEditing(null)}
           onUpdated={refetch}
         />
+      )}
+
+      {/* Consultation fee schedule for one hospital */}
+      {pricing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-50 rounded-xl shadow-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto">
+            <div className="flex justify-between items-start px-6 py-4 border-b border-slate-200 bg-white rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Consultation Fees</h3>
+                <p className="text-sm text-slate-500">{pricing.name}</p>
+              </div>
+              <button onClick={() => setPricing(null)} className="text-slate-400 hover:text-slate-900 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <ConsultationFeesContent hospitalId={pricing.id} />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Suspend / Reactivate confirmation */}

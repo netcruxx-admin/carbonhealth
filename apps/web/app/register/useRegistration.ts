@@ -11,6 +11,7 @@ import { authStorage } from '@/lib/auth';
 import { resolveHomePath } from '@/lib/roles';
 import { useRegisterMutation, type HospitalPublicInfo } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
+import { patientProfilePayload } from '@/components/patients/patientProfile';
 import {
   accountSchema,
   ageFromDateOfBirth,
@@ -62,17 +63,10 @@ export function useRegistration() {
         name: values.name,
         role: 'patient',
         phone: values.phone.trim() ? `+91${values.phone.trim()}` : '',
-        // Sent so the backend can tell whether this is a minor, which decides
-        // whether it demands a guardian on the consent (DPDP s.9).
-        dateOfBirth: values.dateOfBirth,
-        gender: values.gender,
-        bloodGroup: values.bloodGroup,
-        allergies: values.allergies.trim() || undefined,
-        chronicDiseases: values.chronicDiseases.trim() || undefined,
-        emergencyContact: values.emergencyContact.trim() || undefined,
-        emergencyPhone: values.emergencyPhone.trim() ? `+91${values.emergencyPhone.trim()}` : undefined,
-        insuranceProvider: values.insuranceProvider.trim() || undefined,
-        insuranceNumber: values.insuranceNumber.trim() || undefined,
+        // The whole patient record in one spread — including the date of
+        // birth, which the backend reads to decide whether this sign-up needs
+        // a guardian's consent (DPDP s.9).
+        ...patientProfilePayload(values),
         consents: values.consents,
         guardianName: values.guardianName.trim(),
         guardianRelationship: values.guardianRelationship.trim(),

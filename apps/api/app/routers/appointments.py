@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, schemas
+from .. import consent as consent_lib, models, pricing, schemas
 from ..auth import get_current_user
 from ..authz import (
     SCOPE_OWN,
@@ -17,6 +17,7 @@ from ..database import get_db
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import (
     appointment_name_search,
+    appointment_bills,
     appointments_with_vitals,
     doctor_display,
     new_id,
@@ -75,12 +76,21 @@ def list_appointments(
     # The nurse's list shows whether vitals have been recorded; one query over
     # the page, rather than the client fetching every vitals row to find out.
     with_vitals = appointments_with_vitals(db, (r.id for r in rows))
+    # Paid or not, on the appointment itself: the desk works the list, not the
+    # ledger, and chasing an unpaid visit should not need a second screen.
+    bills = appointment_bills(db, (r.id for r in rows), tenant_id)
     out = []
     for row in rows:
         item = schemas.AppointmentOut.model_validate(row)
         item.patient_name, item.patient_phone = patients.get(row.patient_id, ("", ""))
         item.doctor_name = doctors.get(row.doctor_id, "")
         item.has_vitals = row.id in with_vitals
+        bill = bills.get(row.id)
+        if bill is not None:
+            item.payment_id = bill.payment_id
+            item.payment_status = bill.status
+            item.payment_amount = bill.amount
+            item.payment_method = bill.payment_method
         out.append(item)
     return out
 
@@ -148,14 +158,25 @@ def create_appointment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
+    # `payment_mode` is how this booking is being paid for, not a column on the
+    # appointment: the answer lives on the payment row it raises below.
+    fields = body.model_dump()
+    payment_mode = fields.pop("payment_mode", None)
+
     appointment = models.Appointment(
         id=new_id("apt"),
         hospital_id=tenant_id,
         created_at=now_iso(),
-        **body.model_dump(),
+        **fields,
     )
     db.add(appointment)
     db.flush()
+
+    # Booking and billing land in one transaction, so a booking paid at the
+    # desk can never exist without the bill that goes with it.
+    pricing.bill_at_counter(
+        db, tenant_id=tenant_id, appointment=appointment, payment_mode=payment_mode
+    )
 
     if appointment.mode == "video":
         # Telemedicine Practice Guidelines 2020: a teleconsultation is consented
@@ -201,7 +222,16 @@ def get_appointment(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
         )
-    return appointment
+    # The detail view answers the same "is this paid" question the list does,
+    # so a screen does not change its mind about a visit when you open it.
+    item = schemas.AppointmentOut.model_validate(appointment)
+    bill = appointment_bills(db, [appointment.id], tenant_id).get(appointment.id)
+    if bill is not None:
+        item.payment_id = bill.payment_id
+        item.payment_status = bill.status
+        item.payment_amount = bill.amount
+        item.payment_method = bill.payment_method
+    return item
 
 
 @router.put("/{appointment_id}", response_model=schemas.AppointmentOut)

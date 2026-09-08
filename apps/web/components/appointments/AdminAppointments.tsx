@@ -27,6 +27,8 @@ import type { LucideIcon } from 'lucide-react';
 import type { Appointment, Department, Doctor } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
+import { PaymentBadge } from './PaymentBadge';
+import { CollectPaymentModal } from '@/components/payments/CollectPaymentModal';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
@@ -179,6 +181,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
   // Deletion is a platform capability: hospital staff create and edit, the
   // platform owner is the one who can erase. See migration x9y0z1a2b3c4.
   const canDelete = hasPermission(session, 'appointments.delete');
+  // Settling a bill from the board is the same capability as settling it from
+  // the Billing screen, so it is gated on the permission rather than on being
+  // the front desk — an admin who holds it gets the shortcut too.
+  const canCollect = hasPermission(session, 'payments.manage');
 
   const searchParams = useSearchParams();
   const initialStatus = (['scheduled', 'completed', 'cancelled'] as const).find(
@@ -216,6 +222,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [reSaving, setReSaving] = useState(false);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
+  const [collecting, setCollecting] = useState<Appointment | null>(null);
 
   useEffect(() => {
     setPage(1);
@@ -424,6 +431,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
+                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Payment</th>
                       <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                     </tr>
                   </thead>
@@ -451,6 +459,16 @@ export function AdminAppointments({ session }: RoleViewProps) {
                           <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(r.status)}`}>
                             {r.status}
                           </span>
+                        </td>
+                        <td className="py-3 px-6">
+                          <PaymentBadge
+                            appointment={r.appt}
+                            onCollect={
+                              canCollect && r.appt.paymentStatus === 'pending' && r.appt.paymentId
+                                ? () => setCollecting(r.appt)
+                                : undefined
+                            }
+                          />
                         </td>
                         <td className="py-3 px-6">
                           <div className="flex items-center justify-end gap-1">
@@ -734,6 +752,22 @@ export function AdminAppointments({ session }: RoleViewProps) {
           </div>
         </div>
       )}
+
+      {/* Collect payment — the badge on an unpaid row opens this */}
+        <CollectPaymentModal
+          open={collecting !== null}
+          onClose={() => setCollecting(null)}
+          paymentId={collecting?.paymentId ?? ''}
+          amount={collecting?.paymentAmount ?? 0}
+          patientName={collecting?.patientName}
+          defaultMode={
+            // What the booking said it would be paid by, so the usual case is
+            // one click. `online` never reaches here — those settle themselves.
+            collecting?.paymentMethod === 'card' || collecting?.paymentMethod === 'upi'
+              ? collecting.paymentMethod
+              : 'cash'
+          }
+        />
 
       {/* Follow-up modal */}
       {followUp && (

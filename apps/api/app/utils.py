@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Iterable, Optional, Sequence, TypeVar
 from uuid import uuid4
 
-from fastapi import Query, Response
+from fastapi import HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, aliased
 
@@ -78,6 +78,39 @@ def paginate(query, response: Response, limit: Optional[int], offset: int):
     if offset:
         query = query.offset(offset)
     return query
+
+
+def assert_aadhaar_unused(
+    db: Session,
+    tenant_id: str,
+    aadhaar_number: Optional[str],
+    *,
+    exclude_patient_id: Optional[str] = None,
+) -> None:
+    """Refuse a second record for a person this hospital already has.
+
+    Catching the duplicate here rather than letting the unique index raise is
+    the difference between "Anita Desai is already registered" and a 500. The
+    number is the only field on the record that can answer "is this the same
+    person", which is the whole reason it is collected.
+
+    Scoped to the tenant: the same patient at two hospitals is two records, and
+    neither may learn about the other.
+    """
+    if not aadhaar_number:
+        return
+    query = (
+        db.query(models.Patient)
+        .filter(models.Patient.hospital_id == tenant_id)
+        .filter(models.Patient.aadhaar_number == aadhaar_number)
+    )
+    if exclude_patient_id:
+        query = query.filter(models.Patient.id != exclude_patient_id)
+    if query.first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A patient with this Aadhaar number is already registered here.",
+        )
 
 
 def users_by_id(db: Session, user_ids: Iterable[str]) -> dict[str, models.User]:
@@ -269,6 +302,57 @@ def appointments_with_vitals(db: Session, appointment_ids: Iterable[str]) -> set
         .all()
     )
     return {row[0] for row in rows}
+
+
+@dataclass
+class AppointmentBill:
+    """The consultation bill attached to an appointment, as a list needs it."""
+
+    payment_id: str
+    amount: float
+    status: str
+    payment_method: str
+
+
+def appointment_bills(
+    db: Session, appointment_ids: Iterable[str], tenant_id: str
+) -> dict[str, AppointmentBill]:
+    """The consultation bill for each of these appointments, in one query.
+
+    Answers "is this visit paid for" on the appointment itself rather than
+    making the client fetch payment rows — the same shape as
+    `appointments_with_vitals`, and the same reason: a table of twenty
+    appointments should not cost twenty round trips, and a doctor who may read
+    an appointment but not the payments ledger can still be told whether the
+    patient has settled at the desk.
+
+    Only consultation payments are considered. A pharmacy or lab payment can
+    share a patient but never answers "was this visit paid for".
+    """
+    ids = {aid for aid in appointment_ids if aid}
+    if not ids:
+        return {}
+    rows = (
+        db.query(models.Payment)
+        .filter(models.Payment.hospital_id == tenant_id)
+        .filter(models.Payment.appointment_id.in_(ids))
+        .filter(models.Payment.payment_type == "consultation")
+        # Oldest first so that when a visit somehow carries more than one bill,
+        # the one the desk raised at booking is the one reported.
+        .order_by(models.Payment.created_at.asc())
+        .all()
+    )
+    bills: dict[str, AppointmentBill] = {}
+    for row in rows:
+        if row.appointment_id in bills:
+            continue
+        bills[row.appointment_id] = AppointmentBill(
+            payment_id=row.id,
+            amount=float(row.amount or 0),
+            status=row.status or "",
+            payment_method=row.payment_method or "",
+        )
+    return bills
 
 
 @dataclass

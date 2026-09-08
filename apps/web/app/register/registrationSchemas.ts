@@ -9,12 +9,13 @@
 // KYC provider. When a real one is wired up (POST /verifications/…), the step
 // comes back — against the backend, not a list in the bundle.
 import * as Yup from 'yup';
+import {
+  emptyPatientProfile,
+  patientProfileSchemaFields,
+} from '@/components/patients/patientProfile';
 
 export type Role = 'patient';
 export type Step = 'hospital' | 'role' | 'account' | 'details' | 'consent';
-
-export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
-export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'];
 
 const PHONE_REGEX = /^\d{10}$/;
 
@@ -27,16 +28,9 @@ export const initialValues = {
   phone: '',
   password: '',
   confirmPassword: '',
-  // patient details
-  dateOfBirth: '',
-  gender: '',
-  bloodGroup: '',
-  emergencyContact: '',
-  emergencyPhone: '',
-  allergies: '',
-  chronicDiseases: '',
-  insuranceProvider: '',
-  insuranceNumber: '',
+  // The patient's own details — the same set the front desk fills in, spread
+  // from one definition so the two doors cannot drift apart again.
+  ...emptyPatientProfile,
   // consent — purpose codes ticked on the notice, and the guardian who ticked
   // them when the patient is under 18 (DPDP s.9).
   consents: [] as string[],
@@ -65,8 +59,10 @@ export const accountSchema = Yup.object({
 });
 
 export const patientDetailsSchema = Yup.object({
+  ...patientProfileSchemaFields,
+  // Required here alone: the backend reads it to decide whether this sign-up
+  // needs a guardian's consent (DPDP s.9), so it cannot be left for later.
   dateOfBirth: Yup.string().required('Date of birth is required'),
-  emergencyPhone: Yup.string().matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number').notRequired(),
 });
 
 /** Age in whole years, or null when no usable date of birth was given.

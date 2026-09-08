@@ -51,11 +51,6 @@ const doctorFields = Yup.object({
     .typeError('Must be a number')
     .min(0, 'Cannot be negative')
     .required('Experience is required'),
-  consultationFee: Yup.number()
-    .transform((value, original) => (original === '' ? undefined : value))
-    .typeError('Must be a number')
-    .min(0, 'Cannot be negative')
-    .required('Fee is required'),
 });
 
 export function StaffProfile({ session }: RoleViewProps) {
@@ -178,16 +173,12 @@ export function StaffProfile({ session }: RoleViewProps) {
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Experience (years)</dt>
                     <dd className="text-slate-800 font-medium">{doctor?.experienceYears ?? '—'}</dd>
                   </div>
-                  <div>
-                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Consultation Fee (₹)</dt>
-                    <dd className="text-slate-800 font-medium">{doctor?.consultationFee ?? '—'}</dd>
-                  </div>
                 </>
               )}
             </dl>
           ) : (
             /* ── Edit form ── */
-            <Formik<{name: string; email: string; phone: string; departmentId: string; specialization: string; qualification: string; experienceYears: string; consultationFee: string}>
+            <Formik<{name: string; email: string; phone: string; departmentId: string; specialization: string; qualification: string; experienceYears: string}>
               initialValues={{
                 name: currentUser?.name ?? '',
                 email: currentUser?.email ?? '',
@@ -196,7 +187,6 @@ export function StaffProfile({ session }: RoleViewProps) {
                 specialization: doctor?.specialization ?? '',
                 qualification: doctor?.qualification ?? '',
                 experienceYears: String(doctor?.experienceYears ?? ''),
-                consultationFee: String(doctor?.consultationFee ?? ''),
               }}
               enableReinitialize
               validationSchema={schema}
@@ -218,7 +208,6 @@ export function StaffProfile({ session }: RoleViewProps) {
                         specialization: values.specialization,
                         qualification: values.qualification.trim(),
                         experienceYears: Number(values.experienceYears),
-                        consultationFee: Number(values.consultationFee),
                       },
                     }).unwrap();
                   } else {
@@ -282,7 +271,6 @@ export function StaffProfile({ session }: RoleViewProps) {
                       <FormField name="qualification" label="Qualification" placeholder="e.g. MBBS, MD" required />
                     </div>
                     <FormField name="experienceYears" label="Experience (years)" type="number" min="0" placeholder="0" required />
-                    <FormField name="consultationFee" label="Consultation Fee (₹)" type="number" min="0" placeholder="0" required />
                   </>
                 )}
                 <div className="sm:col-span-2 flex justify-end pt-2">

@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, schemas, storage
+from .. import consent as consent_lib, models, pricing, schemas, storage
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_patient_id, own_record_filter, require_permission
 from ..config import settings
@@ -102,6 +102,107 @@ def list_payments(
     query = text_search(query, [models.Payment.payment_method, models.Payment.id], params.q)
     query = query.order_by(models.Payment.created_at.desc(), models.Payment.id)
     return paginate(query, response, params.limit, params.offset).all()
+
+
+@router.get("/consultation-billing", response_model=schemas.ConsultationBillingSummary)
+def get_consultation_billing_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _scope: str = Depends(require_permission("payments.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Day-level consultation billing for the front desk.
+
+    The counterpart to the pharmacy report: every consultation payment for the
+    date with the patient, the doctor, what kind of visit it was billed as, and
+    the method breakdown. `pending_total` is billed-but-uncollected — the number
+    the desk chases before close of day, and the reason status travels on each
+    row rather than being filtered out.
+    """
+    import datetime as dt
+
+    report_date = date or dt.date.today().isoformat()
+
+    payments = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.payment_type == "consultation")
+        .filter(models.Payment.created_at.like(f"{report_date}%"))
+        .order_by(models.Payment.created_at.asc())
+        .all()
+    )
+
+    # Resolve display names in one query each, rather than per row.
+    patient_map = patient_display(db, list({p.patient_id for p in payments}), tenant_id)
+
+    appointment_ids = [p.appointment_id for p in payments if p.appointment_id]
+    appointment_map: dict = {}
+    if appointment_ids:
+        appointments = (
+            scoped(db, models.Appointment, tenant_id)
+            .filter(models.Appointment.id.in_(appointment_ids))
+            .all()
+        )
+        appointment_map = {a.id: a for a in appointments}
+
+    doctor_map = doctor_display(
+        db, list({a.doctor_id for a in appointment_map.values()}), tenant_id
+    )
+    department_map = {
+        d.id: d.name for d in scoped(db, models.Department, tenant_id).all()
+    }
+    visit_labels = pricing.label_map(db, tenant_id)
+
+    rows: list[schemas.ConsultationBillingRow] = []
+    total = cash_total = upi_total = card_total = pending_total = 0.0
+
+    for payment in payments:
+        patient_name, patient_phone = patient_map.get(payment.patient_id, ("", ""))
+        appointment = appointment_map.get(payment.appointment_id or "")
+        visit_type = (appointment.visit_type if appointment else "") or ""
+
+        rows.append(schemas.ConsultationBillingRow(
+            payment_id=payment.id,
+            invoice_number=payment.id.replace("pay-", "INV-").upper(),
+            created_at=payment.created_at,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            doctor_name=doctor_map.get(appointment.doctor_id, "") if appointment else "",
+            department_name=department_map.get(appointment.department_id, "") if appointment else "",
+            visit_type=visit_type,
+            visit_type_label=visit_labels.get(visit_type, visit_type),
+            appointment_date=(appointment.date if appointment else "") or "",
+            appointment_time=(appointment.time if appointment else "") or "",
+            amount=payment.amount,
+            status=payment.status or "",
+            payment_method=payment.payment_method or "",
+        ))
+
+        # Only money actually collected counts toward the day's takings; the
+        # rest is what the desk still has to collect.
+        if (payment.status or "") != "completed":
+            pending_total += payment.amount
+            continue
+
+        total += payment.amount
+        method = (payment.payment_method or "").lower()
+        if method == "cash":
+            cash_total += payment.amount
+        elif method in ("upi", "qr"):
+            upi_total += payment.amount
+        elif method == "card":
+            card_total += payment.amount
+
+    return schemas.ConsultationBillingSummary(
+        date=report_date,
+        rows=rows,
+        total=round(total, 2),
+        cash_total=round(cash_total, 2),
+        upi_total=round(upi_total, 2),
+        card_total=round(card_total, 2),
+        pending_total=round(pending_total, 2),
+        bill_count=len(rows),
+    )
 
 
 @router.get("/pharmacy-billing", response_model=schemas.PharmacyBillingSummary)
@@ -315,7 +416,9 @@ def get_invoice(
 def create_payment(
     body: schemas.PaymentCreate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_permission("payments.manage")),
+    # Raising a bill, not altering one: the front desk records what a patient
+    # owes when it books them, without also being able to edit or void a bill.
+    _: str = Depends(require_permission("payments.create")),
     tenant_id: str = Depends(get_tenant_id),
 ):
     # Every foreign key on the body, checked against the caller's tenant.
@@ -397,20 +500,10 @@ def initiate_payment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
-    # The fee comes from the doctor record, not the client — the client cannot
-    # forge a lower amount by altering the request body.
-    doctor = scoped(db, models.Doctor, tenant_id).filter(
-        models.Doctor.id == body.doctor_id
-    ).first()
-    if doctor is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Doctor not found")
-
-    fee_inr = doctor.consultation_fee or 0.0
-    if fee_inr <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="This doctor has no consultation fee set. Please contact the hospital.",
-        )
+    # The fee comes from the hospital's price list, not the client — naming a
+    # visit type cannot forge a cheaper amount, and pricing.fee_for refuses an
+    # unpriced or retired one rather than booking at zero.
+    fee_inr = pricing.fee_for(db, tenant_id, body.visit_type)
 
     amount_paise = int(fee_inr * 100)  # Razorpay expects paise (1 INR = 100 paise)
 
@@ -521,15 +614,17 @@ def verify_payment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
-    # Re-fetch the fee from the doctor record so the amount stored in the
-    # payment row is always ours, never a number the client sent.
-    doctor = scoped(db, models.Doctor, tenant_id).filter(
-        models.Doctor.id == body.doctor_id
-    ).first()
-    if doctor is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Doctor not found")
-
-    fee_inr = doctor.consultation_fee or 0.0
+    # Re-price from the schedule so the amount stored in the payment row is
+    # always ours, never a number the client sent.
+    #
+    # This one does NOT refuse an unpriced visit type, unlike /initiate. By the
+    # time this runs Razorpay has taken the patient's money, so raising here
+    # would leave them charged with no appointment — the worst of the outcomes
+    # available. /initiate already refused an unpriced booking, so reaching this
+    # line unpriced means the schedule changed mid-checkout; the booking stands
+    # and the amount lands on the day-report for the desk to reconcile.
+    priced = pricing.find_fee(db, tenant_id, body.visit_type)
+    fee_inr = float(priced.amount or 0) if priced else 0.0
 
     # --- Create appointment ---
     appointment = models.Appointment(
@@ -544,6 +639,9 @@ def verify_payment(
         reason=body.reason,
         notes=body.notes,
         mode=body.mode,
+        # Record what this visit was priced as, so the day-report and any later
+        # question about the amount can be answered from the appointment itself.
+        visit_type=body.visit_type,
         follow_up_of=body.follow_up_of,
     )
     db.add(appointment)

@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 
 from .database import Base
@@ -491,6 +492,34 @@ class Patient(Base):
     insurance_provider = Column(String, default="")
     insurance_number = Column(String, default="")
     documents = Column(JSON, default=list)
+    # Government identity. Optional on purpose: a hospital may not refuse care
+    # for want of an Aadhaar, and a walk-in emergency has no paperwork at all.
+    # Validated (12 digits, Verhoeff) rather than merely stored — see
+    # app/identity.py — because its only operational use is matching a person
+    # to a record they already have, and a mistyped number matches nothing.
+    aadhaar_number = Column(String, default="")
+    # Where the patient lives. Same column names as hospital_profiles so one
+    # address form, and one Google Places autocomplete, serves both.
+    address_line1 = Column(String, default="")
+    address_line2 = Column(String, default="")
+    city = Column(String, default="")
+    district = Column(String, default="")
+    state = Column(String, default="")
+    pincode = Column(String, default="")
+    country = Column(String, default="India")
+
+    __table_args__ = (
+        # The same person cannot be registered twice at one hospital, which is
+        # the reason to collect the number at all. Partial, because the empty
+        # string is "not given" and any number of records may not give it.
+        Index(
+            "uq_patients_tenant_aadhaar",
+            "hospital_id",
+            "aadhaar_number",
+            unique=True,
+            postgresql_where=Column("aadhaar_number") != "",
+        ),
+    )
 
 
 class Doctor(Base):
@@ -503,7 +532,10 @@ class Doctor(Base):
     qualification = Column(Text, default="")
     specialization = Column(String, default="")
     experience_years = Column(Integer, default=0)
-    consultation_fee = Column(Float, default=0)
+    # No consultation_fee here on purpose. What a consultation costs is the
+    # hospital's price for a *kind of visit*, not an attribute of the person
+    # giving it — see ConsultationFee. Pricing per doctor made every new hire a
+    # pricing decision and let a doctor edit their own price from their profile.
     available_slots = Column(JSON, default=list)
     # Medical-council credentials (collected at self-registration).
     license_number = Column(String, default="")
@@ -511,6 +543,37 @@ class Doctor(Base):
     registration_year = Column(String, default="")
     # 'verified' for seeded doctors; self-registered start 'pending'.
     verification_status = Column(String, default="verified")
+
+
+class ConsultationFee(Base):
+    """What a hospital charges for a kind of visit.
+
+    One row per visit type per hospital: "New Patient" ₹600, "Follow-up" ₹300.
+    The booking flow names a `visit_type` and the server reads the amount from
+    here, so the price is never a number the browser sent — the same guarantee
+    the per-doctor fee gave, without pricing people.
+
+    `visit_type` is the stable key (appointments store the slug); `label` is what
+    staff see and may be reworded without rewriting history. Rows are
+    deactivated rather than deleted when a hospital stops offering a visit type,
+    so past appointments still resolve to the price they were booked at.
+    """
+
+    __tablename__ = "consultation_fees"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    visit_type = Column(String, nullable=False)
+    label = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0)
+    active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(String, nullable=False)
+
+    __table_args__ = (
+        # A hospital prices each visit type once.
+        UniqueConstraint("hospital_id", "visit_type", name="uq_consultation_fees_tenant_type"),
+    )
 
 
 class Department(Base):
@@ -536,6 +599,12 @@ class Appointment(Base):
     mode = Column(String, default="in-person")  # in-person | video
     reason = Column(Text, default="")
     notes = Column(Text, default="")
+    # Which published price this visit is billed at — the slug of a
+    # ConsultationFee row (new | follow_up | emergency, plus anything the
+    # hospital adds). The client names the kind of visit; the server prices it.
+    # Kept as a slug rather than an FK so deleting a price row cannot orphan the
+    # history of what a past visit was booked as.
+    visit_type = Column(String, nullable=False, server_default="new", default="new")
     # Set when booked as a follow-up to an earlier appointment.
     follow_up_of = Column(String, nullable=True)
     # Raised by the server when a booked date/time is moved — a fact about what

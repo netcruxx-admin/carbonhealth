@@ -19,7 +19,6 @@ const editSchema = Yup.object({
   specialization: Yup.string().trim().max(100, 'Too long'),
   qualification: Yup.string().trim().max(100, 'Too long'),
   experienceYears: Yup.number().min(0, 'Cannot be negative').integer('Must be a whole number'),
-  consultationFee: Yup.number().min(0, 'Cannot be negative'),
 });
 
 interface Props {
@@ -66,7 +65,6 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
             specialization: doctor.specialization ?? '',
             qualification: doctor.qualification ?? '',
             experienceYears: doctor.experienceYears ?? 0,
-            consultationFee: doctor.consultationFee ?? 0,
           }}
           validationSchema={editSchema}
           onSubmit={async (values, { setSubmitting, setStatus }) => {
@@ -83,7 +81,6 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                   specialization: values.specialization.trim(),
                   qualification: values.qualification.trim(),
                   experienceYears: Number(values.experienceYears),
-                  consultationFee: Number(values.consultationFee),
                 },
               }).unwrap();
               toast.success('Doctor updated');
@@ -123,10 +120,7 @@ export function EditDoctorModal({ doctor, onClose, onSuccess, hospitalId }: Prop
                   <FormField name="specialization" label="Specialization" placeholder="e.g. Interventional Cardiology" />
                   <FormField name="qualification" label="Qualification" placeholder="e.g. MBBS, MD" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField name="experienceYears" label="Experience (years)" type="number" placeholder="5" />
-                  <FormField name="consultationFee" label="Consultation Fee (₹)" type="number" placeholder="500" />
-                </div>
+                <FormField name="experienceYears" label="Experience (years)" type="number" placeholder="5" />
                 {status && (
                   <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                     {status}

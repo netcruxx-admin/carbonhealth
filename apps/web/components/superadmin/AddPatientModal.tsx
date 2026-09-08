@@ -2,21 +2,42 @@
 
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { useCreateUserMutation } from '@/store/api';
-import { PhoneInput } from '@/components/form/PhoneField';
+import { FormField } from '@/components/form/FormField';
+import { PhoneField, withPrefix } from '@/components/form/PhoneField';
+import {
+  PatientProfileFields,
+  emptyPatientProfile,
+  patientProfilePayload,
+  patientProfileSchemaFields,
+} from '@/components/patients/patientProfile';
 import { apiError } from '@/lib/apiError';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
 
-const GENDERS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'other', label: 'Other' },
-];
-const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+/**
+ * Registering a patient at the counter.
+ *
+ * Asks for exactly what the patient would be asked if they signed up
+ * themselves — the fields come from PatientProfileFields, shared with the
+ * public wizard and the edit modal. It used to ask for five things and stop,
+ * which left address, allergies, next of kin and insurance uncollectable at
+ * the desk even though the record had somewhere to put most of them.
+ */
+
+const schema = Yup.object({
+  name: Yup.string().trim().required('Full name is required'),
+  email: Yup.string().email('Enter a valid email').required('Email is required'),
+  phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
+  password: Yup.string().min(8, 'At least 8 characters').required('Password is required'),
+  dateOfBirth: Yup.string().required('Date of birth is required'),
+  ...patientProfileSchemaFields,
+});
 
 interface Props {
   open: boolean;
@@ -30,125 +51,115 @@ interface Props {
 export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalId = '', hospitals }: Props) {
   const isSuperadmin = hospitals !== undefined;
   const [hospitalId, setHospitalId] = useState(preselectedHospitalId);
-  const [form, setForm] = useState({
-    name: '', email: '', password: 'password123', phone: '',
-    gender: '', bloodGroup: '', dateOfBirth: '',
-  });
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [createUser] = useCreateUserMutation();
 
   if (!open) return null;
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
   const handleClose = () => {
-    setForm({ name: '', email: '', password: 'password123', phone: '', gender: '', bloodGroup: '', dateOfBirth: '' });
-    setError(''); setHospitalId(preselectedHospitalId); onClose();
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSuperadmin && !hospitalId) { setError('Please select a hospital'); return; }
-    if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
-    if (!form.dateOfBirth) { setError('Date of birth is required'); return; }
-    setLoading(true); setError('');
-    const body = {
-      name: form.name.trim(), email: form.email.trim(),
-      password: form.password, role: patientRole,
-      phone: form.phone.trim() ? `+91${form.phone.trim()}` : undefined,
-      gender: form.gender || undefined,
-      bloodGroup: form.bloodGroup || undefined,
-      dateOfBirth: form.dateOfBirth || undefined,
-    };
-    try {
-      if (isSuperadmin) {
-        await superadminPost('/users', hospitalId, body);
-      } else {
-        await createUser(body).unwrap();
-      }
-      toast.success('Patient added successfully');
-      onSuccess(); handleClose();
-    } catch (err) {
-      setError(apiError(err, 'Failed to add patient'));
-    } finally {
-      setLoading(false);
-    }
+    setError('');
+    setHospitalId(preselectedHospitalId);
+    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-8">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8 max-h-[92vh] flex flex-col">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 shrink-0">
           <h3 className="text-lg font-bold text-slate-900">Add Patient</h3>
           <button onClick={handleClose} className="text-slate-400 hover:text-slate-900 p-1"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Hospital selector — superadmin only */}
-          {isSuperadmin && (
-            preselectedHospitalId ? (
-              <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
-                Hospital: <span className="font-medium text-slate-900">{hospitals!.find(h => h.id === preselectedHospitalId)?.name}</span>
+
+        <Formik
+          initialValues={{
+            name: '',
+            email: '',
+            phone: '',
+            password: 'password123',
+            ...emptyPatientProfile,
+          }}
+          validationSchema={schema}
+          onSubmit={async (values, { setSubmitting }) => {
+            if (isSuperadmin && !hospitalId) {
+              setError('Please select a hospital');
+              setSubmitting(false);
+              return;
+            }
+            setError('');
+            const body = {
+              name: values.name.trim(),
+              email: values.email.trim(),
+              password: values.password,
+              role: patientRole,
+              phone: withPrefix(values.phone),
+              ...patientProfilePayload(values),
+            };
+            try {
+              if (isSuperadmin) {
+                await superadminPost('/users', hospitalId, body);
+              } else {
+                await createUser(body).unwrap();
+              }
+              toast.success('Patient added successfully');
+              onSuccess();
+              handleClose();
+            } catch (err) {
+              setError(apiError(err, 'Failed to add patient'));
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+        >
+          {({ isSubmitting }) => (
+            <Form className="flex flex-col flex-1 min-h-0">
+              <div className="px-6 py-5 space-y-6 overflow-y-auto flex-1">
+                {/* Hospital selector — superadmin only */}
+                {isSuperadmin && (
+                  preselectedHospitalId ? (
+                    <div className="bg-slate-50 rounded-lg px-3 py-2 text-sm text-slate-600">
+                      Hospital: <span className="font-medium text-slate-900">{hospitals!.find(h => h.id === preselectedHospitalId)?.name}</span>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
+                      <select
+                        value={hospitalId}
+                        onChange={(e) => setHospitalId(e.target.value)}
+                        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500"
+                      >
+                        <option value="">Select a hospital…</option>
+                        {hospitals!.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                    </div>
+                  )
+                )}
+
+                <fieldset className="space-y-4">
+                  <legend className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Account
+                  </legend>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField name="name" label="Full Name" placeholder="e.g. Anita Desai" required />
+                    <PhoneField name="phone" label="Phone" />
+                    <FormField name="email" label="Email" type="email" placeholder="patient@email.com" required />
+                    <FormField name="password" label="Password" type="password" required />
+                  </div>
+                </fieldset>
+
+                <PatientProfileFields requireDateOfBirth />
+
+                {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
               </div>
-            ) : (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hospital <span className="text-red-500">*</span></label>
-                <select value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                  <option value="">Select a hospital…</option>
-                  {hospitals!.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                </select>
+
+              <div className="flex gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
+                <button type="button" onClick={handleClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
+                  {isSubmitting ? <Spinner size="sm" label="Adding…" /> : 'Add Patient'}
+                </button>
               </div>
-            )
+            </Form>
           )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-              <input value={form.name} onChange={set('name')} placeholder="e.g. Anita Desai" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div>
-              <PhoneInput
-                label="Phone"
-                name="phone"
-                value={form.phone}
-                onChange={(digits) => setForm((f) => ({ ...f, phone: digits }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
-              <input type="email" value={form.email} onChange={set('email')} placeholder="patient@email.com" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <input type="password" value={form.password} onChange={set('password')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-              <select value={form.gender} onChange={set('gender')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                <option value="">Select…</option>
-                {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Blood Group</label>
-              <select value={form.bloodGroup} onChange={set('bloodGroup')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500">
-                <option value="">Select…</option>
-                {BLOOD_GROUPS.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date of Birth <span className="text-red-500">*</span></label>
-              <input type="date" value={form.dateOfBirth} onChange={set('dateOfBirth')} max={new Date().toISOString().split('T')[0]} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
-            </div>
-          </div>
-
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button type="button" onClick={handleClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-            <button type="submit" disabled={loading} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">{loading ? <Spinner size="sm" label="Adding…" /> : 'Add Patient'}</button>
-          </div>
-        </form>
+        </Formik>
       </div>
     </div>
   );

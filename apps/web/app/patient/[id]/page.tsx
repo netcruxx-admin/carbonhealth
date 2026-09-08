@@ -19,6 +19,7 @@ import {
   CalendarPlus,
   AlertTriangle,
   ClipboardList,
+  Fingerprint,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDashboardGuard } from '@/hooks/useDashboardGuard';
@@ -37,6 +38,8 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
+import { formatPatientAddress } from '@/components/patients/patientProfile';
+import { maskAadhaar } from '@/lib/aadhaar';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -230,6 +233,21 @@ export default function PatientDetailPage() {
             <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
             <Info label="Insurance Provider" value={patientRecord.insuranceProvider} />
             <Info label="Insurance Number" value={patientRecord.insuranceNumber} />
+          </div>
+        </div>
+
+        {/* Who and where — collected at registration, and the two things the
+            desk reaches for when a patient turns up without their papers. */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <Fingerprint className="w-5 h-5 text-cyan-600" /> Identity &amp; Address
+          </h3>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 text-sm">
+            {/* Masked: the last four confirm the right number is on file, and
+                the full one is in the edit form for whoever has to correct it. */}
+            <Info label="Aadhaar" value={maskAadhaar(patientRecord.aadhaarNumber)} />
+            <Info label="Address" value={formatPatientAddress(patientRecord)} />
+            <Info label="PIN Code" value={patientRecord.pincode} />
           </div>
         </div>
 

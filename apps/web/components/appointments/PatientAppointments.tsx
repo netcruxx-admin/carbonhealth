@@ -8,6 +8,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientAppointmentsQuery } from '@/store/api';
 import type { Appointment } from '@/lib/types';
+import { PaymentBadge } from './PaymentBadge';
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 import { Spinner } from '@/components/ui/spinner';
@@ -96,6 +97,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Reason</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
+                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Payment</th>
                   <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
               </thead>
@@ -121,6 +123,9 @@ export function PatientAppointments({ session }: RoleViewProps) {
                       <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold capitalize ${statusStyle(apt.status)}`}>
                         {apt.status}
                       </span>
+                    </td>
+                    <td className="py-3 px-6">
+                      <PaymentBadge appointment={apt} />
                     </td>
                     <td className="py-3 px-6 text-right">
                       <div className="flex items-center justify-end gap-1">

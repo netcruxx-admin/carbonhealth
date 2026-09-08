@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { superadminPost, superadminGet } from '@/lib/superadminFetch';
 import type { HospitalInfo } from '@/store/api';
-import type { Patient, Doctor, Department } from '@/lib/types';
+import type { Patient, Doctor, Department, ConsultationFee } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 
 interface Props {
   open: boolean;
@@ -20,11 +21,15 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [fees, setFees] = useState<ConsultationFee[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  // Counter modes only — same reason as the superadmin booking page: a Razorpay
+  // checkout here would be the platform paying on the hospital's account.
+  const [paymentMode, setPaymentMode] = useState<CounterPaymentMode>('cash');
 
   const [form, setForm] = useState({
     patientId: '', doctorId: '', departmentId: '',
-    date: '', time: '', reason: '', mode: 'in-person',
+    date: '', time: '', reason: '', mode: 'in-person', visitType: 'new',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,15 +38,17 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
   useEffect(() => {
     if (!hospitalId || !open) return;
     setLoadingOptions(true);
-    setPatients([]); setDoctors([]); setDepartments([]);
+    setPatients([]); setDoctors([]); setDepartments([]); setFees([]);
     setForm((f) => ({ ...f, patientId: '', doctorId: '', departmentId: '' }));
 
     Promise.all([
       superadminGet<Patient[]>('/patients', hospitalId),
       superadminGet<Doctor[]>('/doctors', hospitalId),
       superadminGet<Department[]>('/departments', hospitalId),
+      // That hospital's price list — what the visit is billed at is theirs, not ours.
+      superadminGet<ConsultationFee[]>('/consultation-fees', hospitalId),
     ])
-      .then(([p, d, dep]) => { setPatients(p); setDoctors(d); setDepartments(dep); })
+      .then(([p, d, dep, f]) => { setPatients(p); setDoctors(d); setDepartments(dep); setFees(f); })
       .catch(() => {/* silent — dropdowns stay empty */})
       .finally(() => setLoadingOptions(false));
   }, [hospitalId, open]);
@@ -52,9 +59,9 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const handleClose = () => {
-    setForm({ patientId: '', doctorId: '', departmentId: '', date: '', time: '', reason: '', mode: 'in-person' });
-    setError(''); setHospitalId(preselectedHospitalId);
-    setPatients([]); setDoctors([]); setDepartments([]);
+    setForm({ patientId: '', doctorId: '', departmentId: '', date: '', time: '', reason: '', mode: 'in-person', visitType: 'new' });
+    setError(''); setHospitalId(preselectedHospitalId); setPaymentMode('cash');
+    setPatients([]); setDoctors([]); setDepartments([]); setFees([]);
     onClose();
   };
 
@@ -71,6 +78,7 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
         departmentId: form.departmentId, date: form.date,
         time: form.time, reason: form.reason.trim(),
         mode: form.mode, status: 'scheduled',
+        visitType: form.visitType, paymentMode,
       });
       onSuccess(); handleClose();
     } catch (err) {
@@ -149,9 +157,23 @@ export function AddAppointmentModal({ open, onClose, onSuccess, preselectedHospi
                 <label className="block text-sm font-medium text-slate-700 mb-1">Time <span className="text-red-500">*</span></label>
                 <input type="time" value={form.time} onChange={set('time')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 disabled:bg-slate-50" />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Visit Type</label>
+                <select value={form.visitType} onChange={set('visitType')} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 disabled:bg-slate-50 disabled:text-slate-400">
+                  {fees.length === 0 && <option value="new">New Patient</option>}
+                  {fees.map((f) => (
+                    <option key={f.id} value={f.visitType}>
+                      {f.amount > 0 ? `${f.label} — ₹${f.amount}` : f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
                 <input value={form.reason} onChange={set('reason')} placeholder="e.g. Routine checkup" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 disabled:bg-slate-50" />
+              </div>
+              <div className="col-span-2">
+                <PaymentModeField value={paymentMode} onChange={setPaymentMode} allowOnline={false} />
               </div>
             </div>
           </fieldset>

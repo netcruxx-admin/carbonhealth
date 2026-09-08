@@ -168,7 +168,6 @@ export function PlatformDoctors({ session }: RoleViewProps) {
           { label: 'Specialization', value: viewing?.specialization },
           { label: 'Qualification', value: viewing?.qualification },
           { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
-          { label: 'Consultation fee', value: viewing ? `₹${viewing.consultationFee}` : '' },
           { label: 'Licence number', value: viewing?.licenseNumber },
           { label: 'Medical council', value: viewing?.medicalCouncil },
           { label: 'Registration year', value: viewing?.registrationYear },

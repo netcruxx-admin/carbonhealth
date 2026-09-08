@@ -1,17 +1,22 @@
 'use client';
 
 import { RoleView } from '@/components/RoleView';
-import { PharmacyBillingPage } from '@/components/billing/PharmacyBillingPage';
-import { pharmacistRole, adminRole } from '@/lib/roles';
+import { BillingPage } from '@/components/billing/BillingPage';
+import { pharmacistRole, adminRole, receptionistRole } from '@/lib/roles';
 
-export default function BillingPage() {
+export default function BillingRoute() {
   return (
     <RoleView
       path="/dashboard/billing"
       views={{
-        [pharmacistRole]: PharmacyBillingPage,
-        [adminRole]: PharmacyBillingPage,
+        [pharmacistRole]: BillingPage,
+        [adminRole]: BillingPage,
+        [receptionistRole]: BillingPage,
       }}
+      // The screen is the same for every counter; the tabs inside it, and the
+      // permissions behind them, are what differ. A role created at runtime with
+      // payments.read lands here too rather than on the "no view" notice.
+      viewsByScope={{ all: BillingPage, own: BillingPage }}
     />
   );
 }

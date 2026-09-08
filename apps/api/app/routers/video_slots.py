@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
+from .. import models, pricing, schemas
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..database import get_db
@@ -106,18 +106,20 @@ def book_video_slot(
             # The patient comes from the appointment, not the request: the
             # appointment already knows whose it is, so the invoice cannot be
             # addressed to someone else.
-            doctor = (
-                scoped(db, models.Doctor, tenant_id)
-                .filter(models.Doctor.id == slot.doctor_id)
-                .first()
-            )
+            # Priced from the hospital's schedule by what kind of visit this is.
+            # Unlike the checkout flow this does not refuse an unpriced visit
+            # type: nothing is being collected here, and failing to attach a
+            # slot to an appointment because a price is missing would take away
+            # the consultation as well as the invoice. The row lands at 0 and
+            # the front desk sees it as pending on the day-report.
+            fee = pricing.find_fee(db, tenant_id, appointment.visit_type)
             db.add(
                 models.Payment(
                     id=new_id("pay"),
                     hospital_id=tenant_id,
                     appointment_id=appointment.id,
                     patient_id=appointment.patient_id,
-                    amount=doctor.consultation_fee if doctor else 0,
+                    amount=(fee.amount if fee and fee.active else 0) or 0,
                     status="pending",
                     payment_method="Online",
                     created_at=now_iso(),

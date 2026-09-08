@@ -16,6 +16,15 @@ import {
 } from '@/store/api';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
+import {
+  PatientAddressFields,
+  emptyPatientProfile,
+  formatPatientAddress,
+  patientProfilePayload,
+  patientProfileSchemaFields,
+  patientProfileValues,
+} from '@/components/patients/patientProfile';
+import { maskAadhaar } from '@/lib/aadhaar';
 import { ConsentSettings } from './ConsentSettings';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -32,38 +41,38 @@ interface FormValues {
   chronicDiseases: string;
   insuranceProvider: string;
   insuranceNumber: string;
+  // The same identity and address fields the registration forms collect, so a
+  // patient can keep their own record complete rather than ringing the desk.
+  aadhaarNumber: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  country: string;
 }
 
 const schema = Yup.object({
+  ...patientProfileSchemaFields,
   name: Yup.string().trim().required('Name is required'),
   email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
-  dateOfBirth: Yup.string(),
-  gender: Yup.string(),
   phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) =>
     !v || /^\d{10}$/.test(v),
   ),
-  emergencyContact: Yup.string(),
-  emergencyPhone: Yup.string().test('emergencyPhone', 'Enter a valid 10-digit mobile number', (v) =>
-    !v || /^\d{10}$/.test(v),
-  ),
-  bloodGroup: Yup.string(),
-  allergies: Yup.string(),
-  chronicDiseases: Yup.string(),
-  insuranceProvider: Yup.string(),
-  insuranceNumber: Yup.string(),
 });
 
 // Fields that belong to each step — used to scope Next-button validation.
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-  1: ['name', 'email', 'dateOfBirth', 'gender'],
-  2: ['phone', 'emergencyContact', 'emergencyPhone'],
+  1: ['name', 'email', 'dateOfBirth', 'gender', 'aadhaarNumber'],
+  2: ['phone', 'emergencyContact', 'emergencyPhone', 'addressLine1', 'city', 'pincode'],
   3: ['bloodGroup', 'allergies', 'chronicDiseases'],
   4: ['insuranceProvider', 'insuranceNumber'],
 };
 
 const steps = [
   { number: 1, title: 'Personal Info' },
-  { number: 2, title: 'Contact Details' },
+  { number: 2, title: 'Contact & Address' },
   { number: 3, title: 'Medical Info' },
   { number: 4, title: 'Insurance' },
 ];
@@ -137,20 +146,28 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
             placeholder="Select Gender"
             options={genderOptions}
           />
+          <FormField name="aadhaarNumber" label="Aadhaar Number" placeholder="1234 5678 9012" />
+          <p className="text-xs text-slate-400">
+            Optional. It is used only so the hospital recognises you as the same person on a
+            later visit.
+          </p>
         </div>
       )}
 
       {/* Step 2: Contact Details */}
       {currentStep === 2 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">Contact Details</h3>
-          <PhoneField name="phone" label="Phone Number" />
-          <FormField
-            name="emergencyContact"
-            label="Emergency Contact Name"
-            placeholder="e.g. Priya Sharma"
-          />
-          <PhoneField name="emergencyPhone" label="Emergency Contact Phone" />
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">Contact Details</h3>
+            <PhoneField name="phone" label="Phone Number" />
+            <FormField
+              name="emergencyContact"
+              label="Emergency Contact Name"
+              placeholder="e.g. Priya Sharma"
+            />
+            <PhoneField name="emergencyPhone" label="Emergency Contact Phone" />
+          </div>
+          <PatientAddressFields />
         </div>
       )}
 
@@ -254,19 +271,14 @@ export function PatientProfile({ session }: RoleViewProps) {
     }
   }, [isLoading]);
 
+  // The patient's own record as form values, plus the two account fields that
+  // live on the user rather than the patient row.
+  const profileValues = patient ? patientProfileValues(patient) : emptyPatientProfile;
   const initialValues: FormValues = {
+    ...profileValues,
     name: session.user.name ?? '',
     email: session.user.email ?? '',
-    dateOfBirth: patient?.dateOfBirth ?? '',
-    gender: (patient?.gender ?? '').toLowerCase(),
     phone: toPhoneDigits(patient?.phone || session.user.phone || ''),
-    emergencyContact: patient?.emergencyContact ?? '',
-    emergencyPhone: toPhoneDigits(patient?.emergencyPhone ?? ''),
-    bloodGroup: patient?.bloodGroup ?? '',
-    allergies: patient?.allergies ?? '',
-    chronicDiseases: patient?.chronicDiseases ?? '',
-    insuranceProvider: patient?.insuranceProvider ?? '',
-    insuranceNumber: patient?.insuranceNumber ?? '',
   };
 
 
@@ -319,6 +331,13 @@ export function PatientProfile({ session }: RoleViewProps) {
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Gender</dt>
                     <dd className="text-slate-800 font-medium capitalize">{patient?.gender || 'None'}</dd>
                   </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Aadhaar</dt>
+                    {/* Masked in the read-only view: the last four are enough to
+                        confirm the right number is on file, and the full one is
+                        there in the edit form for whoever needs to correct it. */}
+                    <dd className="text-slate-800 font-medium">{maskAadhaar(patient?.aadhaarNumber ?? '') || 'None'}</dd>
+                  </div>
                 </dl>
               </div>
 
@@ -336,6 +355,12 @@ export function PatientProfile({ session }: RoleViewProps) {
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Phone</dt>
                     <dd className="text-slate-800 font-medium">{patient?.emergencyPhone || 'None'}</dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Address</dt>
+                    <dd className="text-slate-800 font-medium">
+                      {patient ? formatPatientAddress(patient) || 'None' : 'None'}
+                    </dd>
                   </div>
                 </dl>
               </div>
@@ -384,17 +409,7 @@ export function PatientProfile({ session }: RoleViewProps) {
                   await Promise.all([
                     updatePatient({
                       id: patient.id,
-                      body: {
-                        dateOfBirth: values.dateOfBirth || undefined,
-                        gender: values.gender || undefined,
-                        bloodGroup: values.bloodGroup || undefined,
-                        allergies: values.allergies || undefined,
-                        chronicDiseases: values.chronicDiseases || undefined,
-                        emergencyContact: values.emergencyContact || undefined,
-                        emergencyPhone: withPrefix(values.emergencyPhone) || undefined,
-                        insuranceProvider: values.insuranceProvider || undefined,
-                        insuranceNumber: values.insuranceNumber || undefined,
-                      },
+                      body: patientProfilePayload(values),
                     }).unwrap(),
                     updateOwnAccount({
                       name: values.name.trim() || undefined,

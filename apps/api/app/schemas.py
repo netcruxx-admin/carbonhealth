@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 from pydantic.alias_generators import to_camel
 from pydantic_core import PydanticUndefined
 
+from . import identity, pricing
+
 # Any code present in the `roles` table. Not a Literal: the catalog is
 # superadmin-managed at runtime (routers/roles.py), so a closed union here would
 # make every user holding a custom role fail response validation. Referential
@@ -875,17 +877,43 @@ class RoleUpdate(CamelModel):
 
 
 # ---------- Auth ----------
-class RegisterRequest(CamelModel):
-    email: str
-    password: str
-    name: str
-    role: RegisterRole
-    phone: str = ""
-    # Doctor-specific (ignored for other roles)
-    specialization: Optional[str] = None
-    qualification: Optional[str] = None
-    experience_years: Optional[int] = None
-    # Patient-specific (ignored for other roles)
+#: The patient-record columns every write path collects. Listed once because
+#: three endpoints fill the same row — public sign-up, POST /users from the
+#: front desk, and PUT /patients — and they used to disagree about which
+#: fields a patient even has.
+PATIENT_PROFILE_COLUMNS = (
+    "gender",
+    "blood_group",
+    "date_of_birth",
+    "allergies",
+    "chronic_diseases",
+    "emergency_contact",
+    "emergency_phone",
+    "insurance_provider",
+    "insurance_number",
+    "aadhaar_number",
+    "address_line1",
+    "address_line2",
+    "city",
+    "district",
+    "state",
+    "pincode",
+    "country",
+)
+
+
+class PatientProfileFields(CamelModel):
+    """What a patient record holds about the person, for any schema that writes one.
+
+    Inherited rather than repeated so the three doors into a patient record —
+    sign-up, staff-created, edited — cannot drift into collecting different
+    subsets of the same person, which is exactly what they had done.
+
+    Everything is optional: a walk-in emergency is registered with a name and
+    little else, and refusing the record until the paperwork arrives is not a
+    thing a hospital can do.
+    """
+
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
@@ -895,6 +923,70 @@ class RegisterRequest(CamelModel):
     emergency_phone: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
+    #: Twelve digits, checked for transcription rather than verified — see
+    #: app/identity.py for the difference and why it matters here.
+    aadhaar_number: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    country: Optional[str] = None
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def _normalise_gender(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
+    @field_validator("aadhaar_number", mode="before")
+    @classmethod
+    def _normalise_aadhaar(cls, v: object) -> object:
+        if isinstance(v, str):
+            return identity.normalise_aadhaar(v)
+        return v
+
+    @field_validator("pincode", mode="before")
+    @classmethod
+    def _normalise_pincode(cls, v: object) -> object:
+        if isinstance(v, str):
+            return identity.normalise_pincode(v)
+        return v
+
+    def patient_record_values(self) -> dict:
+        """The columns this body carries, ready to splat into models.Patient.
+
+        Absent and null both read as "not collected" and land as the column's
+        empty value, so a form that omits a field never nulls one out.
+        """
+        values = {
+            name: getattr(self, name, None) or ""
+            for name in PATIENT_PROFILE_COLUMNS
+        }
+        # A blank country would print an address that ends in a comma.
+        values["country"] = values["country"] or "India"
+        return values
+
+
+class RegisterRequest(PatientProfileFields):
+    """Public sign-up. Patients only — see RegisterRole.
+
+    The patient's own details come from PatientProfileFields, the same set the
+    front desk fills in on POST /users, so a person who signs up themselves and
+    a person registered at the counter end up as the same shape of record.
+    """
+
+    email: str
+    password: str
+    name: str
+    role: RegisterRole
+    phone: str = ""
+    # Doctor-specific (ignored for other roles)
+    specialization: Optional[str] = None
+    qualification: Optional[str] = None
+    experience_years: Optional[int] = None
     # Purposes the person ticked on the notice. Every required purpose must be
     # present or the sign-up is refused — an account cannot exist before there
     # is a lawful basis for the data it is about to hold. Codes come from
@@ -904,18 +996,17 @@ class RegisterRequest(CamelModel):
     guardian_name: str = ""
     guardian_relationship: str = ""
 
-    @field_validator("gender", mode="before")
-    @classmethod
-    def _normalise_gender(cls, v: object) -> object:
-        if isinstance(v, str):
-            return v.lower()
-        return v
 
-
-class UserCreate(CamelModel):
+class UserCreate(PatientProfileFields):
     """Staff (or patient) account created by someone with `users.manage`.
     Unlike RegisterRequest, any non-platform role in the catalog is allowed —
-    including roles a superadmin added at runtime."""
+    including roles a superadmin added at runtime.
+
+    Carries the full patient profile for the same reason: the front desk
+    registering a walk-in is filling in the same record the patient would have
+    filled in themselves, and the fields it happened to omit were the ones
+    nobody could add later without a second screen.
+    """
 
     email: str
     password: str
@@ -927,18 +1018,6 @@ class UserCreate(CamelModel):
     specialization: Optional[str] = None
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
-    consultation_fee: Optional[float] = None
-    # Patient-specific (ignored for other roles)
-    gender: Optional[str] = None
-    blood_group: Optional[str] = None
-    date_of_birth: Optional[str] = None
-
-    @field_validator("gender", mode="before")
-    @classmethod
-    def _normalise_gender(cls, v: object) -> object:
-        if isinstance(v, str):
-            return v.lower()
-        return v
 
 
 class UserUpdate(CamelModel):
@@ -1014,6 +1093,14 @@ class PatientOut(OutModel):
     medical_history: str = ""
     insurance_provider: str = ""
     insurance_number: str = ""
+    aadhaar_number: str = ""
+    address_line1: str = ""
+    address_line2: str = ""
+    city: str = ""
+    district: str = ""
+    state: str = ""
+    pincode: str = ""
+    country: str = ""
     documents: List[str] = []
     # Appointment aggregates, present only when the caller asks for withStats.
     # Absent (0/None) otherwise, so the common read stays cheap.
@@ -1023,24 +1110,11 @@ class PatientOut(OutModel):
     user: Optional["UserOut"] = None
 
 
-class PatientUpdate(CamelModel):
-    date_of_birth: Optional[str] = None
-    gender: Optional[str] = None
-    blood_group: Optional[str] = None
+class PatientUpdate(PatientProfileFields):
+    """Edit an existing record. Every field is optional and unset means
+    untouched, so a screen that shows half the record cannot blank the rest."""
 
-    @field_validator("gender", mode="before")
-    @classmethod
-    def _normalise_gender(cls, v: object) -> object:
-        if isinstance(v, str):
-            return v.lower()
-        return v
-    allergies: Optional[str] = None
-    chronic_diseases: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    emergency_phone: Optional[str] = None
     medical_history: Optional[str] = None
-    insurance_provider: Optional[str] = None
-    insurance_number: Optional[str] = None
     documents: Optional[List[str]] = None
 
 
@@ -1060,7 +1134,6 @@ class DoctorOut(OutModel):
     qualification: str = ""
     specialization: str = ""
     experience_years: int = 0
-    consultation_fee: float = 0
     available_slots: List[TimeSlot] = []
     license_number: str = ""
     medical_council: str = ""
@@ -1080,7 +1153,6 @@ class DoctorUpdate(CamelModel):
     qualification: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
-    consultation_fee: Optional[float] = None
     available_slots: Optional[List[TimeSlot]] = None
     license_number: Optional[str] = None
     medical_council: Optional[str] = None
@@ -1149,7 +1221,28 @@ class AppointmentCreate(CamelModel):
     notes: str = ""
     status: AppointmentStatus = "scheduled"
     mode: AppointmentMode = "in-person"
+    #: Which published price this visit is billed at. The server resolves the
+    #: amount from the hospital's fee schedule; the client only names the kind.
+    visit_type: str = "new"
     follow_up_of: Optional[str] = None
+    #: How the visit is being paid for at the desk: cash | card | upi. Naming
+    #: one has the server raise the pending bill itself (pricing.bill_at_counter)
+    #: rather than the browser posting a second request — see that function for
+    #: why. Omitted means this booking raises no bill: the online flow
+    #: (/payments/initiate -> /payments/verify) writes its own.
+    payment_mode: Optional[str] = None
+
+    @field_validator("payment_mode")
+    @classmethod
+    def _known_payment_mode(cls, value: Optional[str]) -> Optional[str]:
+        if not value:
+            return None
+        if value not in pricing.COUNTER_PAYMENT_MODES:
+            raise ValueError(
+                "paymentMode must be one of: "
+                + ", ".join(pricing.COUNTER_PAYMENT_MODES)
+            )
+        return value
 
 
 class AppointmentUpdate(CamelModel):
@@ -1178,6 +1271,7 @@ class AppointmentOut(OutModel):
     mode: AppointmentMode = "in-person"
     reason: str = ""
     notes: str = ""
+    visit_type: str = "new"
     follow_up_of: Optional[str] = None
     rescheduled: bool = False
     created_at: str
@@ -1189,6 +1283,14 @@ class AppointmentOut(OutModel):
     doctor_name: str = ""
     #: Whether vitals have been recorded against this appointment.
     has_vitals: bool = False
+    #: The consultation bill for this visit, answered on the appointment rather
+    #: than by handing over the payments ledger. "" when no bill was raised —
+    #: which is not the same as unpaid, and the UI says so.
+    payment_status: str = ""
+    payment_amount: float = 0
+    payment_method: str = ""
+    #: The bill's id, so a desk that may collect can act on it from the list.
+    payment_id: str = ""
 
 
 class AppointmentStatsOut(OutModel):
@@ -1326,6 +1428,67 @@ class PharmacyBillingSummary(OutModel):
     bill_count: int = 0
 
 
+class ConsultationBillingRow(OutModel):
+    """One line in the consultation billing day-report."""
+    payment_id: str
+    invoice_number: str
+    created_at: str
+    patient_name: str = ""
+    patient_phone: str = ""
+    doctor_name: str = ""
+    department_name: str = ""
+    visit_type: str = ""
+    visit_type_label: str = ""
+    appointment_date: str = ""
+    appointment_time: str = ""
+    amount: float = 0.0
+    status: str = ""
+    payment_method: str = ""
+
+
+class ConsultationBillingSummary(OutModel):
+    """Aggregated consultation billing for one day, for the front desk."""
+    date: str
+    rows: List[ConsultationBillingRow] = []
+    total: float = 0.0
+    cash_total: float = 0.0
+    upi_total: float = 0.0
+    card_total: float = 0.0
+    #: Billed but not yet collected — what the desk still has to chase.
+    pending_total: float = 0.0
+    bill_count: int = 0
+
+
+# --- Consultation fee schedule (what a kind of visit costs) ---
+
+class ConsultationFeeOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    visit_type: str
+    label: str
+    amount: float = 0.0
+    active: bool = True
+    sort_order: int = 0
+    created_at: str = ""
+
+
+class ConsultationFeeCreate(CamelModel):
+    """`visit_type` is derived from the label when omitted, so the common case
+    is just a name and a price."""
+    label: str
+    amount: float = 0.0
+    visit_type: Optional[str] = None
+    active: bool = True
+    sort_order: int = 0
+
+
+class ConsultationFeeUpdate(CamelModel):
+    label: Optional[str] = None
+    amount: Optional[float] = None
+    active: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
 class PharmacyBillBody(CamelModel):
     """Pharmacist chooses how payment was collected when billing a dispensed order."""
     payment_method: str = "cash"  # cash | razorpay
@@ -1344,13 +1507,15 @@ class PharmacyBillOut(OutModel):
 class PaymentInitiateBody(CamelModel):
     """What the frontend sends to start an online payment before booking.
 
-    The backend fetches the doctor's consultation_fee from the DB so the amount
-    cannot be tampered with on the client. The appointment fields are carried
-    along so /payments/verify can create the appointment atomically on success.
+    The backend prices the visit from the hospital's fee schedule so the amount
+    cannot be tampered with on the client — `visit_type` names the kind of visit,
+    the server looks up what it costs. The appointment fields are carried along
+    so /payments/verify can create the appointment atomically on success.
     """
     doctor_id: str
     patient_id: str
     department_id: str
+    visit_type: str = "new"
     date: str
     time: str
     reason: str
@@ -1389,6 +1554,7 @@ class PaymentVerifyBody(CamelModel):
     doctor_id: str
     patient_id: str
     department_id: str
+    visit_type: str = "new"
     date: str
     time: str
     reason: str

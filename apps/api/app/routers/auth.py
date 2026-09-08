@@ -20,7 +20,7 @@ from ..authz import effective_permissions
 from ..config import settings
 from ..database import get_db
 from ..tenancy import resolve_public_tenant
-from ..utils import new_id, now_iso
+from ..utils import assert_aadhaar_unused, new_id, now_iso
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -160,22 +160,21 @@ def register(
 
     # RegisterRole is patient-only: a public endpoint must not be able to mint an
     # account that can read other people's records. Staff go through POST /users.
+    # Refused before the account is written, so a duplicate sign-up does not
+    # leave a user row behind with no patient record to go with it.
+    assert_aadhaar_unused(db, tenant_id, body.aadhaar_number)
+
     db.add(
         models.Patient(
             id=new_id("pat"),
             hospital_id=tenant_id,
             user_id=user.id,
             phone=body.phone,
-            gender=body.gender or "",
-            blood_group=body.blood_group or "",
-            date_of_birth=body.date_of_birth or "",
-            allergies=body.allergies or "",
-            chronic_diseases=body.chronic_diseases or "",
-            emergency_contact=body.emergency_contact or "",
-            emergency_phone=body.emergency_phone or "",
-            insurance_provider=body.insurance_provider or "",
-            insurance_number=body.insurance_number or "",
             documents=[],
+            # Identity, address and health details in one splat: the same set
+            # the front desk fills in on POST /users, so which door a patient
+            # came through is not visible in the record afterwards.
+            **body.patient_record_values(),
         )
     )
 

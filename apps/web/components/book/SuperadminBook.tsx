@@ -6,7 +6,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Patient, Doctor } from '@/lib/types';
+import type { Patient, Doctor, ConsultationFee } from '@/lib/types';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
 import { superadminGet, superadminPost } from '@/lib/superadminFetch';
@@ -16,6 +16,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
 import { Calendar } from '@/components/ui/calendar';
 import { Spinner } from '@/components/ui/spinner';
+import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -71,7 +72,11 @@ function SuperadminBookForm({ session }: RoleViewProps) {
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [fees, setFees] = useState<ConsultationFee[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
+  // Counter modes only: a checkout run from the platform console would be the
+  // superadmin paying, on a gateway account belonging to the hospital.
+  const [paymentMode, setPaymentMode] = useState<CounterPaymentMode>('cash');
 
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -79,17 +84,20 @@ function SuperadminBookForm({ session }: RoleViewProps) {
   // Reload patients/doctors/departments whenever the hospital changes.
   useEffect(() => {
     if (!hospitalId) {
-      setPatients([]); setDoctors([]);
+      setPatients([]); setDoctors([]); setFees([]);
       return;
     }
     setLoadingOptions(true);
-    setPatients([]); setDoctors([]);
+    setPatients([]); setDoctors([]); setFees([]);
 
     Promise.all([
       superadminGet<Patient[]>('/patients', hospitalId),
       superadminGet<Doctor[]>('/doctors', hospitalId),
+      // That hospital's price list, so the booking is billed at the visit type
+      // it actually is instead of always defaulting to New Patient.
+      superadminGet<ConsultationFee[]>('/consultation-fees', hospitalId),
     ])
-      .then(([p, d]) => { setPatients(p); setDoctors(d); })
+      .then(([p, d, f]) => { setPatients(p); setDoctors(d); setFees(f); })
       .catch(() => {/* silent */})
       .finally(() => setLoadingOptions(false));
   }, [hospitalId]);
@@ -113,6 +121,10 @@ function SuperadminBookForm({ session }: RoleViewProps) {
   const doctorOptions = doctors.map((d) => ({
     value: d.id,
     label: `Dr. ${d.user?.name ?? 'Doctor'}${d.specialization ? ` — ${d.specialization}` : ''}`,
+  }));
+  const visitTypeOptions = fees.map((f) => ({
+    value: f.visitType,
+    label: f.amount > 0 ? `${f.label} — ₹${f.amount}` : f.label,
   }));
 
   const backHref = hospitalId
@@ -162,7 +174,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
           </div>
 
           <Formik
-            initialValues={{ patientId: '', doctorId: '', date: '', time: '', reason: '' }}
+            initialValues={{ patientId: '', doctorId: '', date: '', time: '', visitType: 'new', reason: '' }}
             enableReinitialize
             validationSchema={bookingSchema}
             onSubmit={async (values, { setFieldError }) => {
@@ -180,8 +192,10 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                   date: values.date,
                   time: values.time,
                   status: 'scheduled',
+                  visitType: values.visitType,
                   reason: values.reason,
                   notes: '',
+                  paymentMode,
                 });
                 toast.success('Appointment booked successfully');
                 setSuccess(true);
@@ -301,12 +315,27 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                   </div>
 
                   <FormField
+                    name="visitType"
+                    label="Visit Type"
+                    as="select"
+                    required
+                    placeholder={fees.length ? 'Select a visit type' : 'No fees configured'}
+                    options={visitTypeOptions}
+                  />
+
+                  <FormField
                     name="reason"
                     label="Reason for Visit"
                     required
                     as="textarea"
                     placeholder="Describe the reason for the appointment"
                     rows={3}
+                  />
+
+                  <PaymentModeField
+                    value={paymentMode}
+                    onChange={setPaymentMode}
+                    allowOnline={false}
                   />
                 </fieldset>
 

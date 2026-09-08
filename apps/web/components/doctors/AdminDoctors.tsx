@@ -28,7 +28,6 @@ const exportRow = (d: Doctor, deptName?: string) => [
   d.specialization,
   d.qualification,
   d.experienceYears,
-  d.consultationFee,
   d.verificationStatus ?? 'verified',
 ];
 
@@ -89,7 +88,7 @@ export function AdminDoctors({ session }: RoleViewProps) {
         </select>
         <ExportButton
           filename="doctors"
-          headers={['Name', 'Email', 'Department', 'Specialization', 'Qualification', 'Experience (yrs)', 'Fee', 'Status']}
+          headers={['Name', 'Email', 'Department', 'Specialization', 'Qualification', 'Experience (yrs)', 'Status']}
           rows={filtered.map((d) => exportRow(d, deptById.get(d.departmentId ?? '')))}
           getRows={async () => {
             const all = await fetchAllForExport(listArgs).unwrap();
@@ -129,7 +128,6 @@ export function AdminDoctors({ session }: RoleViewProps) {
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Specialization</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Qualification</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Experience</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Fee</th>
                   <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
                   <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
@@ -145,7 +143,6 @@ export function AdminDoctors({ session }: RoleViewProps) {
                     <td className="py-3 px-6 text-slate-600">{doctor.specialization || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.qualification || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{doctor.experienceYears} yrs</td>
-                    <td className="py-3 px-6 text-slate-600">₹{doctor.consultationFee}</td>
                     <td className="py-3 px-6">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                         doctor.verificationStatus === 'verified'
@@ -205,7 +202,6 @@ export function AdminDoctors({ session }: RoleViewProps) {
           { label: 'Specialization', value: viewing?.specialization },
           { label: 'Qualification', value: viewing?.qualification },
           { label: 'Experience', value: viewing?.experienceYears != null ? `${viewing.experienceYears} yrs` : '' },
-          { label: 'Consultation fee', value: viewing ? `₹${viewing.consultationFee}` : '' },
           { label: 'Licence number', value: viewing?.licenseNumber },
           { label: 'Medical council', value: viewing?.medicalCouncil },
           { label: 'Registration year', value: viewing?.registrationYear },

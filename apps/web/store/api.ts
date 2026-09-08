@@ -21,6 +21,8 @@ import type {
   PaymentVerifyOut,
   PharmacyBillOut,
   PharmacyBillingSummary,
+  ConsultationBillingSummary,
+  ConsultationFee,
   PregnancyRecord,
   Prescription,
   ScheduleBlock,
@@ -453,21 +455,12 @@ export interface ResetPasswordResult {
   temporaryPassword: string;
   mustChangePassword: boolean;
 }
-export interface RegisterBody {
+export interface RegisterBody extends PatientProfileBody {
   email: string;
   password: string;
   name: string;
   role: 'patient' | 'doctor' | 'nurse' | 'lab';
   phone?: string;
-  dateOfBirth?: string;
-  gender?: string;
-  bloodGroup?: string;
-  allergies?: string;
-  chronicDiseases?: string;
-  emergencyContact?: string;
-  emergencyPhone?: string;
-  insuranceProvider?: string;
-  insuranceNumber?: string;
   /**
    * Purpose codes ticked on the notice. The backend refuses the sign-up unless
    * every required purpose is here — an account cannot exist before there is a
@@ -497,7 +490,14 @@ export interface AppointmentCreateBody {
   notes?: string;
   status?: 'scheduled' | 'completed' | 'cancelled';
   mode?: 'in-person' | 'video';
+  /** Which published price the visit is billed at; the server resolves the
+   *  amount from the fee schedule. */
+  visitType?: string;
   followUpOf?: string;
+  /** How the visit is being paid for at the desk. Naming one has the server
+   *  raise the pending bill with the booking, in one transaction; the online
+   *  (Razorpay) flow goes through initiate/verify instead and never sets this. */
+  paymentMode?: 'cash' | 'card' | 'upi';
 }
 export interface AppointmentUpdateBody {
   date?: string;
@@ -512,7 +512,13 @@ export interface AppointmentUpdateBody {
   // `rescheduled` is intentionally not here — the server raises it when the
   // date or time moves.
 }
-export interface PatientUpdateBody {
+/** The patient's own details, on every request body that writes them.
+ *
+ *  Mirrors `PatientProfileFields` in apps/api/app/schemas.py. Shared here for
+ *  the same reason it is shared there: sign-up, the front desk's Add Patient
+ *  and the edit modal all write one record, and each used to send a different
+ *  subset of it. */
+export interface PatientProfileBody {
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
@@ -520,9 +526,19 @@ export interface PatientUpdateBody {
   chronicDiseases?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
-  medicalHistory?: string;
   insuranceProvider?: string;
   insuranceNumber?: string;
+  aadhaarNumber?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+}
+export interface PatientUpdateBody extends PatientProfileBody {
+  medicalHistory?: string;
   documents?: string[];
 }
 export interface MedicalRecordCreateBody {
@@ -559,6 +575,9 @@ export interface PaymentInitiateBody {
   reason?: string;
   notes?: string;
   mode?: 'in-person' | 'video';
+  /** Which published price the visit is billed at; the server resolves the
+   *  amount from the fee schedule. */
+  visitType?: string;
   followUpOf?: string;
 }
 export interface PaymentVerifyBody {
@@ -568,6 +587,9 @@ export interface PaymentVerifyBody {
   doctorId: string;
   patientId: string;
   departmentId: string;
+  /** Which published price the visit is billed at; the server resolves the
+   *  amount from the fee schedule. */
+  visitType?: string;
   date: string;
   time: string;
   reason?: string;
@@ -657,7 +679,7 @@ export interface RoleUpdateBody {
 }
 
 /** Staff account created through POST /users. */
-export interface UserCreateBody {
+export interface UserCreateBody extends PatientProfileBody {
   email: string;
   password: string;
   name: string;
@@ -667,10 +689,6 @@ export interface UserCreateBody {
   specialization?: string;
   qualification?: string;
   experienceYears?: number;
-  consultationFee?: number;
-  gender?: string;
-  bloodGroup?: string;
-  dateOfBirth?: string;
 }
 export interface UserUpdateBody {
   name?: string;
@@ -688,7 +706,6 @@ export interface DoctorUpdateBody {
   qualification?: string;
   specialization?: string;
   experienceYears?: number;
-  consultationFee?: number;
   licenseNumber?: string;
   medicalCouncil?: string;
   registrationYear?: string;
@@ -773,6 +790,7 @@ export const api = createApi({
     'Growth',
     'Immunization',
     'Consent',
+    'ConsultationFee',
     'Me',
   ],
 
@@ -1426,6 +1444,64 @@ export const api = createApi({
       query: (params) => ({ url: '/payments', params: params ?? undefined }),
       providesTags: [{ type: 'Payment', id: 'LIST' }],
     }),
+    getConsultationBillingSummary: build.query<ConsultationBillingSummary, { date?: string } | void>({
+      query: (params) => ({
+        url: '/payments/consultation-billing',
+        params: params ? { date: params.date } : undefined,
+      }),
+      providesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
+
+    // ── Consultation fee schedule ─────────────────────────────────────────────
+    listConsultationFees: build.query<
+      ConsultationFee[],
+      { includeInactive?: boolean; hospitalId?: string } | void
+    >({
+      query: (params) => ({
+        url: '/consultation-fees',
+        params: params?.includeInactive ? { includeInactive: true } : undefined,
+        // Superadmin screens book into a hospital that is not their own, so the
+        // price list they show has to be that hospital's.
+        headers: params?.hospitalId ? { 'X-Hospital-Id': params.hospitalId } : undefined,
+      }),
+      providesTags: [{ type: 'ConsultationFee', id: 'LIST' }],
+    }),
+    // The writes take an optional hospitalId for the same reason the read does:
+    // a superadmin sets prices for a hospital that is not their own, and a
+    // price list edited without naming the tenant would be edited in nobody's.
+    createConsultationFee: build.mutation<
+      ConsultationFee,
+      Partial<ConsultationFee> & { hospitalId?: string }
+    >({
+      query: ({ hospitalId, ...body }) => ({
+        url: '/consultation-fees',
+        method: 'POST',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
+      invalidatesTags: [{ type: 'ConsultationFee', id: 'LIST' }],
+    }),
+    updateConsultationFee: build.mutation<
+      ConsultationFee,
+      { id: string; body: Partial<ConsultationFee>; hospitalId?: string }
+    >({
+      query: ({ id, body, hospitalId }) => ({
+        url: `/consultation-fees/${id}`,
+        method: 'PUT',
+        body,
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
+      invalidatesTags: [{ type: 'ConsultationFee', id: 'LIST' }],
+    }),
+    deleteConsultationFee: build.mutation<void, { id: string; hospitalId?: string }>({
+      query: ({ id, hospitalId }) => ({
+        url: `/consultation-fees/${id}`,
+        method: 'DELETE',
+        headers: hospitalId ? { 'X-Hospital-Id': hospitalId } : undefined,
+      }),
+      invalidatesTags: [{ type: 'ConsultationFee', id: 'LIST' }],
+    }),
+
     getPharmacyBillingSummary: build.query<PharmacyBillingSummary, { date?: string } | void>({
       query: (params) => ({
         url: '/payments/pharmacy-billing',
@@ -1436,6 +1512,13 @@ export const api = createApi({
     createPayment: build.mutation<Payment, PaymentCreateBody>({
       query: (body) => ({ url: '/payments', method: 'POST', body }),
       invalidatesTags: [{ type: 'Payment', id: 'LIST' }],
+    }),
+    /** Settle or correct a bill. Invalidates Appointment too: paid/unpaid is
+     *  shown on the appointment list, so collecting at the desk has to refresh
+     *  the board the desk is looking at. */
+    updatePayment: build.mutation<Payment, { id: string; body: Partial<Payment> }>({
+      query: ({ id, body }) => ({ url: `/payments/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Payment', id: 'LIST' }, { type: 'Appointment', id: 'LIST' }],
     }),
     // Step 1 of online booking: creates a Razorpay order server-side and
     // returns the order_id + key_id needed to open the checkout dialog.
@@ -1928,6 +2011,12 @@ export const {
   useListPaymentsPagedQuery,
   useLazyListPaymentsPagedQuery,
   useGetPharmacyBillingSummaryQuery,
+  useGetConsultationBillingSummaryQuery,
+  useUpdatePaymentMutation,
+  useListConsultationFeesQuery,
+  useCreateConsultationFeeMutation,
+  useUpdateConsultationFeeMutation,
+  useDeleteConsultationFeeMutation,
   useCreatePaymentMutation,
   useInitiatePaymentMutation,
   useVerifyPaymentMutation,
