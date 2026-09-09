@@ -296,17 +296,26 @@ def list_test_results(
     tenant_id: str = Depends(get_tenant_id),
 ):
     query = scoped(db, models.TestResult, tenant_id)
-    # TestResult has no patient_id, so "own" scope is enforced via the parent order.
+    # TestResult carries neither patient_id nor doctor_id, so "own" is enforced
+    # through the parent order: a patient sees results for their own orders, the
+    # ordering doctor sees results for orders they placed. Same either-link rule
+    # as own_record_filter, just one join away.
     if scope == SCOPE_OWN:
+        from sqlalchemy import false
+
         own_pid = caller_patient_id(db, user)
+        own_did = caller_doctor_id(db, user)
+        links = []
         if own_pid:
+            links.append(models.TestOrder.patient_id == own_pid)
+        if own_did:
+            links.append(models.TestOrder.doctor_id == own_did)
+        if links:
             query = query.join(
                 models.TestOrder, models.TestOrder.id == models.TestResult.order_id
-            ).filter(models.TestOrder.patient_id == own_pid)
+            ).filter(or_(*links))
         else:
-            # Non-patient with own scope (e.g. doctor) — not a supported use case
-            # for this endpoint yet; return nothing rather than everything.
-            from sqlalchemy import false
+            # Neither a patient nor a doctor — an "own" grant never widens to all.
             query = query.filter(false())
     if order_id:
         # Comma-separated, so a screen showing several orders can ask for their
