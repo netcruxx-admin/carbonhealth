@@ -83,10 +83,10 @@
  *
  * DashboardShell sets --brand-primary/--brand-primary-dark inline from the
  * signed-in hospital's own theme (falling back to the platform's cyan/teal
- * when a tenant hasn't picked one). Every cyan-*/teal-*/brand-teal utility
- * class used across the dashboard (bg-, text-, border-, ring-, from-, to-,
- * hover:, focus:, ...) already compiles down to var(--color-cyan-N)/
- * var(--color-teal-N)/var(--brand-teal) — see utilities.css. Overriding those
+ * when a tenant hasn't picked one). Every cyan-N / teal-N / brand-teal
+ * utility class used across the dashboard (bg-, text-, border-, ring-, from-,
+ * to-, hover:, focus:, ...) already compiles down to var(--color-cyan-N),
+ * var(--color-teal-N) or var(--brand-teal) — see utilities.css. Overriding those
  * tokens here, on the class that wraps the dashboard, repaints every one of
  * them for that tenant without touching the ~80 files that use them: a value
  * set on an element always wins over the inherited :root default, so nothing
