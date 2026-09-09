@@ -148,7 +148,7 @@ export function DoctorLabOrders({ session }: RoleViewProps) {
                       <td className="py-3 px-6 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2">
                           {r.hasResults && (
-                            <Link href={`/report/${r.order.id}`}>
+                            <Link href={`/print/lab-report/${r.order.id}`}>
                               <ActionIcon icon={Eye} label="View report" />
                             </Link>
                           )}

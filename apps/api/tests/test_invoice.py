@@ -9,7 +9,7 @@ response everyone can read.
 
 import io
 
-from tests.conftest import REQUIRED_CONSENTS
+from tests.conftest import REQUIRED_CONSENTS, a4_letterhead_png
 
 
 def _seed_seller(tenant):
@@ -21,7 +21,7 @@ def _seed_seller(tenant):
     tenant.client.put(
         "/hospitals/me/letterhead",
         headers=tenant.headers(),
-        files={"file": ("lh.png", io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 64), "image/png")},
+        files={"file": ("lh.png", io.BytesIO(a4_letterhead_png()), "image/png")},
     )
 
 

@@ -4,15 +4,11 @@ import { useState } from 'react';
 import { CreditCard, Download, Eye, Banknote, X, Smartphone } from 'lucide-react';
 import type { Payment } from '@/lib/types';
 import { fmtDate } from '@/lib/date';
+import { formatINR } from '@/lib/money';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import {
-  useGetCurrentHospitalQuery,
-  useGetPatientPaymentsQuery,
-  useLazyGetInvoiceQuery,
-} from '@/store/api';
-import { toast } from 'sonner';
-import { apiError } from '@/lib/apiError';
+import { useGetPatientPaymentsQuery } from '@/store/api';
+import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { Spinner } from '@/components/ui/spinner';
 
 // ---------------------------------------------------------------------------
@@ -41,113 +37,6 @@ function paymentMethodIcon(method: string) {
 }
 
 // ---------------------------------------------------------------------------
-// PDF download — opens a styled print window and triggers Save as PDF
-// ---------------------------------------------------------------------------
-
-interface HospitalMeta {
-  name: string;
-  legalName?: string;
-  gstin?: string;
-  tagline?: string;
-  address?: string;
-  phone?: string;
-  /** Printed across the top when the hospital has uploaded one. */
-  letterheadUrl?: string;
-  number?: string;
-}
-
-function downloadInvoicePdf(payment: Payment, patientName: string, hospital: HospitalMeta) {
-  const statusColor =
-    payment.status === 'completed' ? '#16a34a' :
-    payment.status === 'pending'   ? '#d97706' : '#dc2626';
-
-  const txRow = payment.gatewayPaymentId
-    ? `<tr><td class="label">Transaction ID</td><td class="value mono">${payment.gatewayPaymentId}</td></tr>`
-    : '';
-
-  const gstRow = hospital.gstin
-    ? `<p class="meta">GSTIN: ${hospital.gstin}</p>`
-    : '';
-
-  const displayName = hospital.legalName || hospital.name;
-  const tagline = hospital.tagline ? `<p class="tagline">${hospital.tagline}</p>` : '';
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Invoice — ${displayName}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; padding: 48px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
-  .hospital-name { font-size: 22px; font-weight: 700; color: #0f172a; }
-  .tagline { font-size: 13px; color: #64748b; margin-top: 3px; }
-  .meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-  .invoice-label { font-size: 28px; font-weight: 700; color: #0f172a; text-align: right; }
-  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
-  table { width: 100%; border-collapse: collapse; }
-  td { padding: 10px 0; font-size: 14px; }
-  td.label { color: #64748b; width: 45%; }
-  td.value { font-weight: 600; color: #0f172a; text-align: right; }
-  td.mono { font-family: monospace; font-size: 12px; }
-  .total-row td { font-size: 17px; font-weight: 700; border-top: 2px solid #e2e8f0; padding-top: 16px; }
-  .status { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px;
-            font-weight: 600; background: ${statusColor}22; color: ${statusColor}; }
-  .footer { margin-top: 48px; font-size: 12px; color: #94a3b8; text-align: center; }
-  @media print {
-    body { padding: 32px; }
-    @page { margin: 1cm; }
-  }
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <div class="hospital-name">${displayName}</div>
-    ${tagline}
-    ${gstRow}
-  </div>
-  <div class="invoice-label">Invoice</div>
-</div>
-
-<table>
-  <tr><td class="label">Patient</td><td class="value">${patientName}</td></tr>
-  <tr><td class="label">Date</td><td class="value">${fmtDate(payment.createdAt)}</td></tr>
-  <tr><td class="label">Invoice No.</td><td class="value mono">${payment.id}</td></tr>
-  <tr><td class="label">Service</td><td class="value">${paymentTypeLabel(payment.paymentType)}</td></tr>
-  <tr><td class="label">Payment Mode</td><td class="value">${paymentMethodLabel(payment.paymentMethod)}</td></tr>
-  ${txRow}
-  <tr>
-    <td class="label">Status</td>
-    <td class="value"><span class="status">${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}</span></td>
-  </tr>
-</table>
-
-<hr class="divider" />
-
-<table>
-  <tr class="total-row">
-    <td class="label">Total Amount</td>
-    <td class="value">&#8377;${payment.amount}</td>
-  </tr>
-</table>
-
-<div class="footer">
-  ${displayName} &bull; This is a computer-generated invoice and does not require a signature.
-</div>
-
-<script>window.onload = () => { window.print(); }<\/script>
-</body>
-</html>`;
-
-  const win = window.open('', '_blank', 'width=700,height=900');
-  if (!win) return; // popup blocked
-  win.document.write(html);
-  win.document.close();
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -156,30 +45,8 @@ export function PatientPayments({ session }: RoleViewProps) {
 
   const patientId = session?.patient?.id ?? '';
   const { data: payments = [], isLoading } = useGetPatientPaymentsQuery(patientId, { skip: !patientId });
-  const { data: hospitalData } = useGetCurrentHospitalQuery();
-  // The seller block — legal name, GSTIN, letterhead — is fetched per bill
-  // from GET /payments/{id}/invoice. It cannot come from the hospital config
-  // here: that endpoint is public, and a PAN or GSTIN has no business being
-  // readable by anyone who loads the login page.
-  const [fetchInvoice] = useLazyGetInvoiceQuery();
-
-  const printInvoice = async (payment: Payment, name: string) => {
-    try {
-      const invoice = await fetchInvoice(payment.id).unwrap();
-      downloadInvoicePdf(payment, name, {
-        name: invoice.seller.name || hospitalData?.name || 'Hospital',
-        legalName: invoice.seller.legalName,
-        gstin: invoice.seller.gstin,
-        tagline: hospitalData?.tagline,
-        address: invoice.seller.address,
-        phone: invoice.seller.phone,
-        letterheadUrl: invoice.seller.letterheadUrl,
-        number: invoice.number,
-      });
-    } catch (err) {
-      toast.error(apiError(err, 'Could not prepare the invoice'));
-    }
-  };
+  // The bill — seller block, letterhead and all — is assembled by the
+  // /print/invoice route from GET /payments/{id}/invoice. Nothing to fetch here.
 
   const totalPaid = payments.filter((p) => p.status === 'completed').reduce((sum, p) => sum + p.amount, 0);
   const pendingAmount = payments.filter((p) => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0);
@@ -196,11 +63,11 @@ export function PatientPayments({ session }: RoleViewProps) {
         <div className="grid md:grid-cols-3 gap-6">
           <div className="bg-green-50 rounded-lg p-6 border border-green-200">
             <p className="text-green-700 text-sm font-medium mb-2">Total Paid</p>
-            <p className="text-3xl font-bold text-green-600">₹{totalPaid}</p>
+            <p className="text-3xl font-bold text-green-600">{formatINR(totalPaid)}</p>
           </div>
           <div className="bg-orange-50 rounded-lg p-6 border border-orange-200">
             <p className="text-orange-700 text-sm font-medium mb-2">Pending Amount</p>
-            <p className="text-3xl font-bold text-orange-600">₹{pendingAmount}</p>
+            <p className="text-3xl font-bold text-orange-600">{formatINR(pendingAmount)}</p>
           </div>
           <div className="bg-cyan-50 rounded-lg p-6 border border-cyan-200">
             <p className="text-cyan-700 text-sm font-medium mb-2">Total Transactions</p>
@@ -243,7 +110,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                           {paymentMethodLabel(payment.paymentMethod)}
                         </p>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-900">₹{payment.amount}</td>
+                      <td className="py-3 px-4 font-semibold text-slate-900">{formatINR(payment.amount)}</td>
                       <td className="py-3 px-4">
                         <span
                           className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
@@ -269,7 +136,7 @@ export function PatientPayments({ session }: RoleViewProps) {
                           View
                         </button>
                         <button
-                          onClick={() => printInvoice(payment, session.user.name)}
+                          onClick={() => openInvoicePrint(payment.id)}
                           className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm"
                         >
                           <Download className="w-4 h-4 inline mr-1" />
@@ -289,7 +156,7 @@ export function PatientPayments({ session }: RoleViewProps) {
           <InvoiceModal
             payment={invoicePayment}
             patientName={session.user.name}
-            onPrint={printInvoice}
+            onPrint={openInvoicePrint}
             onClose={() => setInvoicePayment(null)}
           />
         )}
@@ -310,8 +177,8 @@ function InvoiceModal({
 }: {
   payment: Payment;
   patientName: string;
-  /** Fetches the seller block and opens the printable bill. */
-  onPrint: (payment: Payment, patientName: string) => void;
+  /** Opens the printable bill for this payment. */
+  onPrint: (paymentId: string) => void;
   onClose: () => void;
 }) {
   return (
@@ -362,7 +229,7 @@ function InvoiceModal({
           </div>
           <div className="flex justify-between border-t pt-3 mt-3">
             <span className="font-semibold text-slate-900">Total</span>
-            <span className="font-bold text-lg text-slate-900">₹{payment.amount}</span>
+            <span className="font-bold text-lg text-slate-900">{formatINR(payment.amount)}</span>
           </div>
         </div>
 
@@ -374,11 +241,11 @@ function InvoiceModal({
             Close
           </button>
           <button
-            onClick={() => onPrint(payment, patientName)}
+            onClick={() => onPrint(payment.id)}
             className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition"
           >
             <Download className="w-4 h-4 inline mr-2" />
-            Download PDF
+            Print / Save PDF
           </button>
         </div>
       </div>

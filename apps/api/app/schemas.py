@@ -282,6 +282,11 @@ class HospitalProfileBase(CamelModel):
     logo_url: str = ""
     letterhead_url: str = ""
     signature_url: str = ""
+    # Safe-area margins (mm from each A4 edge) for a full-page letterhead.
+    letterhead_margin_top_mm: int = 48
+    letterhead_margin_bottom_mm: int = 32
+    letterhead_margin_left_mm: int = 18
+    letterhead_margin_right_mm: int = 18
 
     notes: str = ""
 
@@ -291,6 +296,19 @@ class HospitalProfileBase(CamelModel):
         value = (value or "").strip()
         if value and not _PINCODE_RE.match(value):
             raise ValueError("PIN code must be 6 digits and cannot start with 0")
+        return value
+
+    @field_validator(
+        "letterhead_margin_top_mm", "letterhead_margin_bottom_mm",
+        "letterhead_margin_left_mm", "letterhead_margin_right_mm",
+    )
+    @classmethod
+    def _letterhead_margin(cls, value: int) -> int:
+        # A single edge cannot sensibly claim more than ~half the page. The
+        # picker keeps opposite margins from crossing; this is the backstop for
+        # anything writing the field directly.
+        if value is not None and not (0 <= value <= 130):
+            raise ValueError("Letterhead margin must be between 0 and 130 mm")
         return value
 
     @field_validator(
@@ -414,6 +432,10 @@ class HospitalSelfUpdate(CamelModel):
     logo_url: Optional[str] = None
     letterhead_url: Optional[str] = None
     signature_url: Optional[str] = None
+    letterhead_margin_top_mm: Optional[int] = None
+    letterhead_margin_bottom_mm: Optional[int] = None
+    letterhead_margin_left_mm: Optional[int] = None
+    letterhead_margin_right_mm: Optional[int] = None
 
     notes: Optional[str] = None
 
@@ -425,6 +447,16 @@ class HospitalSelfUpdate(CamelModel):
         value = value.strip()
         if value and not _PINCODE_RE.match(value):
             raise ValueError("PIN code must be 6 digits and cannot start with 0")
+        return value
+
+    @field_validator(
+        "letterhead_margin_top_mm", "letterhead_margin_bottom_mm",
+        "letterhead_margin_left_mm", "letterhead_margin_right_mm",
+    )
+    @classmethod
+    def _letterhead_margin(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and not (0 <= value <= 130):
+            raise ValueError("Letterhead margin must be between 0 and 130 mm")
         return value
 
     @field_validator(
@@ -1359,6 +1391,46 @@ class PaymentOut(OutModel):
     created_at: str
 
 
+class LetterheadMargins(OutModel):
+    """The safe content box on a full-page letterhead, in millimetres from each
+    edge of an A4 page. The print sheet pads its content to this so nothing it
+    draws overlaps the hospital's header band or footer."""
+
+    top: int = 48
+    bottom: int = 32
+    left: int = 18
+    right: int = 18
+
+
+class PrintHeaderOut(OutModel):
+    """The hospital identity block on top of any printable — a lab report, and
+    later a prescription.
+
+    Same shape as `InvoiceSeller` minus `gstin`: a report has no use for the
+    hospital's tax id, and it should not be readable anywhere the one endpoint
+    that needs it (the GST invoice, behind `payments.read`) does not already
+    serve it. `signature_url` is carried for a future sign-off block; nothing
+    renders it yet.
+
+    Served by `GET /hospitals/current/print-header` to any signed-in member of
+    the tenant — the letterhead is not a secret to the staff who print on it,
+    and the document itself is still gated by its own endpoint's 404.
+    """
+
+    name: str = ""
+    legal_name: str = ""
+    address: str = ""
+    phone: str = ""
+    email: str = ""
+    #: A full-page letterhead when set; otherwise the sheet falls back to the
+    #: name and address as text.
+    letterhead_url: str = ""
+    logo_url: str = ""
+    signature_url: str = ""
+    #: Only meaningful with `letterhead_url` — where the sheet may draw.
+    letterhead_margins: LetterheadMargins = LetterheadMargins()
+
+
 class InvoiceSeller(OutModel):
     """Who issued the bill. Assembled server-side from the hospital record.
 
@@ -1374,10 +1446,12 @@ class InvoiceSeller(OutModel):
     address: str = ""
     phone: str = ""
     email: str = ""
-    #: Printed across the top when set; otherwise the bill falls back to the
+    #: A full-page letterhead when set; otherwise the bill falls back to the
     #: name and address as text.
     letterhead_url: str = ""
     logo_url: str = ""
+    #: Only meaningful with `letterhead_url` — where the bill may draw.
+    letterhead_margins: LetterheadMargins = LetterheadMargins()
 
 
 class InvoiceLine(OutModel):

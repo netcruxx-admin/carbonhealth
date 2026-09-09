@@ -170,6 +170,11 @@ export interface HospitalProfileBody {
   logoUrl?: string;
   letterheadUrl?: string;
   signatureUrl?: string;
+  /** Safe content box on a full-page letterhead, mm from each A4 edge. */
+  letterheadMarginTopMm?: number;
+  letterheadMarginBottomMm?: number;
+  letterheadMarginLeftMm?: number;
+  letterheadMarginRightMm?: number;
   notes?: string;
 }
 
@@ -201,6 +206,8 @@ export type HospitalSelfUpdateBody = Pick<
   | 'lunchBreakStart' | 'lunchBreakEnd'
   | 'patientBookingWindowStart' | 'patientBookingWindowEnd'
   | 'logoUrl' | 'letterheadUrl' | 'signatureUrl' | 'notes'
+  | 'letterheadMarginTopMm' | 'letterheadMarginBottomMm'
+  | 'letterheadMarginLeftMm' | 'letterheadMarginRightMm'
 > & {
   name?: string;
   tagline?: string;
@@ -244,6 +251,8 @@ export interface InvoiceSeller {
   email: string;
   letterheadUrl: string;
   logoUrl: string;
+  /** Only meaningful with `letterheadUrl` — the box the bill may draw in. */
+  letterheadMargins: LetterheadMargins;
 }
 
 export interface InvoiceLine {
@@ -266,6 +275,35 @@ export interface Invoice {
   patientPhone: string;
   lines: InvoiceLine[];
   total: number;
+}
+
+/** The hospital identity block on top of anything printed — a lab report today,
+ *  a prescription later. Same shape as `InvoiceSeller` minus the GSTIN, which
+ *  only the GST invoice (behind `payments.read`) serves. Returned by
+ *  GET /hospitals/current/print-header to any signed-in member of the tenant.
+ *
+ *  `PrintSheet` renders it as: letterhead image when set → else logo + text
+ *  identity → else text identity only. Never anonymous.
+ */
+export interface LetterheadMargins {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
+export interface PrintHeader {
+  name: string;
+  legalName: string;
+  address: string;
+  phone: string;
+  email: string;
+  letterheadUrl: string;
+  logoUrl: string;
+  /** Carried for a future sign-off block; nothing renders it yet. */
+  signatureUrl: string;
+  /** Only meaningful with `letterheadUrl` — the box the sheet may draw in. */
+  letterheadMargins: LetterheadMargins;
 }
 
 /** Operational config needed by the booking UI. Public endpoint, no auth. */
@@ -884,6 +922,12 @@ export const api = createApi({
     }),
     getInvoice: build.query<Invoice, string>({
       query: (paymentId) => `/payments/${paymentId}/invoice`,
+    }),
+    /** The tenant's letterhead/identity for print sheets. Tagged 'Hospital' so
+     *  a logo or letterhead upload invalidates it like everything else. */
+    getPrintHeader: build.query<PrintHeader, void>({
+      query: () => '/hospitals/current/print-header',
+      providesTags: ['Hospital'],
     }),
     uploadMyLetterhead: build.mutation<HospitalProfile, File>({
       query: (file) => {
@@ -1941,6 +1985,8 @@ export const {
   useGetHospitalDetailQuery,
   useGetMyHospitalSettingsQuery,
   useLazyGetInvoiceQuery,
+  useGetInvoiceQuery,
+  useGetPrintHeaderQuery,
   useUploadMyLetterheadMutation,
   useRemoveMyLetterheadMutation,
   useUploadMyHospitalLogoMutation,

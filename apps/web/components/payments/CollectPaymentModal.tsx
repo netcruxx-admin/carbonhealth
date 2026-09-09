@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { apiError } from '@/lib/apiError';
+import { formatINR } from '@/lib/money';
 import { useUpdatePaymentMutation } from '@/store/api';
 import { PaymentModeField, type CounterPaymentMode } from './PaymentModeField';
 
@@ -54,7 +55,7 @@ export function CollectPaymentModal({
         id: paymentId,
         body: { status: 'completed', paymentMethod: mode },
       }).unwrap();
-      toast.success(`Collected ₹${amount.toLocaleString('en-IN')}`);
+      toast.success(`Collected ${formatINR(amount, { paise: false })}`);
       onClose();
     } catch (err) {
       toast.error(apiError(err, 'Could not record the payment'));
@@ -81,7 +82,7 @@ export function CollectPaymentModal({
               {patientName && <p className="text-sm text-slate-700 mt-0.5">{patientName}</p>}
             </div>
             <p className="text-2xl font-bold text-slate-900 tabular-nums">
-              ₹{amount.toLocaleString('en-IN')}
+              {formatINR(amount, { paise: false })}
             </p>
           </div>
 

@@ -15,12 +15,12 @@ import {
 import { toast } from 'sonner';
 import {
   useGetConsultationBillingSummaryQuery,
-  useLazyGetInvoiceQuery,
   useUpdatePaymentMutation,
 } from '@/store/api';
 import { apiError } from '@/lib/apiError';
 import type { ConsultationBillingRow } from '@/lib/types';
-import { buildInvoiceHtml, fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
+import { openInvoicePrint } from '@/components/payments/printInvoice';
+import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
 
 /** How money is taken at the counter. Mirrors pricing.COUNTER_PAYMENT_MODES on
  *  the server — online payments settle themselves through the gateway. */
@@ -174,7 +174,6 @@ function Row({
  *  they just cannot say it has been paid. */
 export function ConsultationBillingContent({ canCollect = false }: { canCollect?: boolean } = {}) {
   const [selectedDate, setSelectedDate] = useState<string>(todayIso());
-  const [fetchInvoice] = useLazyGetInvoiceQuery();
 
   const { data: summary, isLoading, isFetching } = useGetConsultationBillingSummaryQuery(
     { date: selectedDate },
@@ -182,19 +181,6 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
   );
 
   const isToday = selectedDate === todayIso();
-
-  async function handlePrint(paymentId: string) {
-    try {
-      const invoice = await fetchInvoice(paymentId).unwrap();
-      const win = window.open('', '_blank');
-      if (!win) return;
-      win.document.write(buildInvoiceHtml(invoice));
-      win.document.close();
-      win.print();
-    } catch {
-      // silent — the user can retry
-    }
-  }
 
   if (isLoading) {
     return (
@@ -299,7 +285,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
               </thead>
               <tbody>
                 {summary.rows.map((row) => (
-                  <Row key={row.paymentId} row={row} onPrint={handlePrint} canCollect={canCollect} />
+                  <Row key={row.paymentId} row={row} onPrint={openInvoicePrint} canCollect={canCollect} />
                 ))}
               </tbody>
               <tfoot>

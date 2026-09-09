@@ -13,9 +13,11 @@ a state nothing downstream expects. Documents are the exception — they are fil
 so they upload against a hospital that already exists.
 """
 
+import io
 from datetime import date, timedelta
 from typing import Optional
 
+from PIL import Image, UnidentifiedImageError
 from fastapi import (
     APIRouter,
     Depends,
@@ -29,7 +31,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from .. import audit, licences as licence_catalog, models, schemas, sessions, storage
+from .. import audit, licences as licence_catalog, models, printing, schemas, sessions, storage
 from ..auth import get_current_user
 from ..authz import require_permission
 from ..categories import CATEGORY_TEMPLATES
@@ -108,6 +110,25 @@ def current_hospital(
         logo_url=storage.public_url(profile.logo_url if profile else ""),
         status=hospital.status,
     )
+
+
+@router.get("/current/print-header", response_model=schemas.PrintHeaderOut)
+def current_print_header(
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+):
+    """The hospital block that goes on top of anything this tenant prints — a
+    lab report today, a prescription later.
+
+    Not on `/current`: that endpoint is public, and a letterhead carries the
+    hospital's registration details. Any signed-in member of the tenant may
+    read it — the letterhead is not a secret to the people who print on it, and
+    each printable document is still gated by its own endpoint. Tenant comes
+    from the token, so there is nothing to point at another hospital.
+
+    Mirrors the seller block on `GET /payments/{id}/invoice`, minus the GSTIN.
+    """
+    return schemas.PrintHeaderOut(**printing.build_print_header(db, user.hospital_id))
 
 
 # ----- Helpers ---------------------------------------------------------------
@@ -551,6 +572,54 @@ BRANDING_ASSETS = {
 }
 
 
+# A4 is 210 x 297 mm. A letterhead is placed as a full-page background and the
+# content box is expressed in mm from its edges, so a letterhead that is not
+# A4-proportioned would stretch and the margins would land in the wrong place.
+_A4_PORTRAIT_RATIO = 210 / 297
+_A4_RATIO_TOLERANCE = 0.03  # ±3% — allows a hairline crop, rejects 4:3 / Letter
+# ~120 dpi across an A4 page. A soft floor — the letterhead is mostly a frame
+# behind text the browser renders crisply — but below it the artwork itself
+# visibly softens.
+_LETTERHEAD_MIN_WIDTH_PX = 1000
+_LETTERHEAD_MIN_HEIGHT_PX = 1414
+
+
+def _assert_letterhead_is_a4(data: bytes) -> None:
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            width, height = image.size
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "That file is not a readable image"
+        )
+
+    if height <= 0 or width <= 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That image has no dimensions")
+
+    if width > height:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "A letterhead must be portrait A4. This image is landscape.",
+        )
+
+    ratio = width / height
+    if abs(ratio - _A4_PORTRAIT_RATIO) > _A4_RATIO_TOLERANCE:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "A letterhead must be A4-proportioned (210 x 297). This image is "
+            f"{width} x {height}px ({ratio:.2f}:1, A4 is 0.71:1) — crop or "
+            "re-export it to A4.",
+        )
+
+    if width < _LETTERHEAD_MIN_WIDTH_PX or height < _LETTERHEAD_MIN_HEIGHT_PX:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"A letterhead must be at least {_LETTERHEAD_MIN_WIDTH_PX} x "
+            f"{_LETTERHEAD_MIN_HEIGHT_PX}px to print acceptably. This image is "
+            f"{width} x {height}px.",
+        )
+
+
 def _store_branding_asset(
     db: Session, tenant_id: str, asset: str, file: UploadFile
 ) -> models.HospitalProfile:
@@ -566,6 +635,11 @@ def _store_branding_asset(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             f"A {asset} must be a JPEG, PNG or WebP image",
         )
+
+    if asset == "letterhead":
+        data = file.file.read()
+        _assert_letterhead_is_a4(data)
+        file.file.seek(0)
 
     profile = _profile_of(db, tenant_id)
     if profile is None:

@@ -1,4 +1,5 @@
 import type { Appointment } from '@/lib/types';
+import { formatINR } from '@/lib/money';
 
 /**
  * Paid / unpaid on an appointment, in one place.
@@ -20,7 +21,7 @@ export function PaymentBadge({
 }) {
   const status = appointment.paymentStatus ?? '';
   const amount = appointment.paymentAmount ?? 0;
-  const amountLabel = amount > 0 ? `₹${amount.toLocaleString('en-IN')}` : '';
+  const amountLabel = amount > 0 ? formatINR(amount, { paise: false }) : '';
 
   if (!status) {
     return (

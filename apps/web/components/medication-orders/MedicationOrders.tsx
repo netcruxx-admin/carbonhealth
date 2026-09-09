@@ -15,13 +15,13 @@ import {
   useAdministerMedicationOrderMutation,
   useCancelMedicationOrderMutation,
   useBillMedicationOrderMutation,
-  useLazyGetInvoiceQuery,
   useListMedicinesQuery,
   useListPatientsQuery,
 } from '@/store/api';
 import { doctorRole, nurseRole, pharmacistRole } from '@/lib/roles';
 import { fmtDate } from '@/lib/date';
-import { printInvoice } from '@/components/payments/printInvoice';
+import { formatINR } from '@/lib/money';
+import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { Spinner } from '@/components/ui/spinner';
 
 type StatusTab = 'all' | MedicationOrderStatus;
@@ -122,7 +122,6 @@ export function MedicationOrders({ session }: RoleViewProps) {
   const [administerOrderMut] = useAdministerMedicationOrderMutation();
   const [cancelOrder] = useCancelMedicationOrderMutation();
   const [billMedicationOrder] = useBillMedicationOrderMutation();
-  const [fetchInvoice] = useLazyGetInvoiceQuery();
 
   /** One entry per patient, in the order their oldest item was raised, so the
    *  person who has been waiting longest is at the top. */
@@ -411,7 +410,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                       {canDispense && (
                         <td className="py-3 px-4 text-right tabular-nums text-slate-700">
                           {order.unitPrice > 0
-                            ? `₹${(order.unitPrice * order.quantity).toFixed(2)}`
+                            ? formatINR(order.unitPrice * order.quantity)
                             : '—'}
                         </td>
                       )}
@@ -649,13 +648,9 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 Close
               </button>
               <button
-                onClick={async () => {
-                  try {
-                    printInvoice(await fetchInvoice(printable).unwrap());
-                    setPrintable(null);
-                  } catch (err) {
-                    toast.error(apiError(err, 'Could not prepare the bill'));
-                  }
+                onClick={() => {
+                  openInvoicePrint(printable);
+                  setPrintable(null);
                 }}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded font-semibold hover:shadow-lg transition"
               >
@@ -745,11 +740,11 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Unit price</span>
-                    <span className="text-slate-900">₹{billedUnitPrice.toFixed(2)}</span>
+                    <span className="text-slate-900">{formatINR(billedUnitPrice)}</span>
                   </div>
                   <div className="flex justify-between border-t pt-2">
                     <span className="font-semibold text-slate-900">Total</span>
-                    <span className="font-bold text-lg text-cyan-700">₹{billedTotal.toFixed(2)}</span>
+                    <span className="font-bold text-lg text-cyan-700">{formatINR(billedTotal)}</span>
                   </div>
                   {billedUnitPrice === 0 && (
                     <p className="text-xs text-amber-600">
@@ -767,7 +762,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 <div className="flex justify-between border-t pt-2 mt-2">
                   <span className="font-semibold text-slate-900">Total</span>
                   <span className="font-bold text-lg text-cyan-700">
-                    ₹{((billOrder.unitPrice ?? 0) * (billOrder.quantity ?? 1)).toFixed(2)}
+                    {formatINR((billOrder.unitPrice ?? 0) * (billOrder.quantity ?? 1))}
                   </span>
                 </div>
               </div>

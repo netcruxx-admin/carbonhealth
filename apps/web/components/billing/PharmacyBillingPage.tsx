@@ -13,9 +13,10 @@ import {
 } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { useGetPharmacyBillingSummaryQuery, useLazyGetInvoiceQuery } from '@/store/api';
+import { useGetPharmacyBillingSummaryQuery } from '@/store/api';
 import type { PharmacyBillingRow } from '@/lib/types';
-import { buildInvoiceHtml, fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
+import { openInvoicePrint } from '@/components/payments/printInvoice';
+import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,6 @@ function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: s
  *  URLs with duplicate date pickers. */
 export function PharmacyBillingContent() {
   const [selectedDate, setSelectedDate] = useState<string>(todayIso());
-  const [fetchInvoice] = useLazyGetInvoiceQuery();
 
   const { data: summary, isLoading, isFetching } = useGetPharmacyBillingSummaryQuery(
     { date: selectedDate },
@@ -111,19 +111,6 @@ export function PharmacyBillingContent() {
   );
 
   const isToday = selectedDate === todayIso();
-
-  async function handlePrint(paymentId: string) {
-    try {
-      const invoice = await fetchInvoice(paymentId).unwrap();
-      const win = window.open('', '_blank');
-      if (!win) return;
-      win.document.write(buildInvoiceHtml(invoice));
-      win.document.close();
-      win.print();
-    } catch {
-      // silent — user can retry
-    }
-  }
 
   if (isLoading) {
     return (
@@ -227,7 +214,7 @@ export function PharmacyBillingContent() {
                 </thead>
                 <tbody>
                   {summary.rows.map((row) => (
-                    <BillingRow key={row.paymentId} row={row} onPrint={handlePrint} />
+                    <BillingRow key={row.paymentId} row={row} onPrint={openInvoicePrint} />
                   ))}
                 </tbody>
                 <tfoot>

@@ -114,7 +114,7 @@ export function LabReports({ session }: RoleViewProps) {
                         </span>
                       </td>
                       <td className="py-3 px-6 text-right">
-                        <Link href={`/report/${r.order.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
+                        <Link href={`/print/lab-report/${r.order.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm">
                           View
                         </Link>
                       </td>

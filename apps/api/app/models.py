@@ -202,6 +202,14 @@ class HospitalProfile(Base):
     logo_url = Column(String, default="")
     letterhead_url = Column(String, default="")
     signature_url = Column(String, default="")
+    # The safe content box on a full-page letterhead, in millimetres from each
+    # edge of an A4 page. The hospital sets these when they upload the artwork
+    # (they are the only ones who know where their header band and footer end);
+    # the print sheet confines everything it draws to the box they leave.
+    letterhead_margin_top_mm = Column(Integer, default=48, server_default="48")
+    letterhead_margin_bottom_mm = Column(Integer, default=32, server_default="32")
+    letterhead_margin_left_mm = Column(Integer, default=18, server_default="18")
+    letterhead_margin_right_mm = Column(Integer, default=18, server_default="18")
 
     notes = Column(Text, default="")
     updated_at = Column(String, default="")

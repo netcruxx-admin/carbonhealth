@@ -122,7 +122,7 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
               </div>
               {(order.status === 'completed' || order.status === 'reviewed') && (
                 <div className="mt-2">
-                  <Link href={`/report/${order.id}`} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
+                  <Link href={`/print/lab-report/${order.id}`} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
                     View report →
                   </Link>
                 </div>

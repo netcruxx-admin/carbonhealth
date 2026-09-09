@@ -335,7 +335,7 @@ function LabOrdersInner({ session }: RoleViewProps) {
                             </button>
                             {r.hasResults && (
                               <Link
-                                href={`/report/${r.order.id}`}
+                                href={`/print/lab-report/${r.order.id}`}
                                 title="View Report"
                                 aria-label="View Report"
                                 className="p-2 rounded-lg text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 transition"

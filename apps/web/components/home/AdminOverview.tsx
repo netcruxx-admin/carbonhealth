@@ -41,6 +41,7 @@ import {
   useListPatientsQuery,
 } from '@/store/api';
 import type { Appointment } from '@/lib/types';
+import { formatINR } from '@/lib/money';
 import { fmtDate } from '@/lib/date';
 
 interface Kpi {
@@ -57,7 +58,7 @@ const BRAND_CYAN = '#0891b2';
 const BRAND_TEAL = '#0d9488';
 const BRAND_EMERALD = '#059669';
 
-const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const inr = (n: number) => formatINR(n, { paise: false });
 const dayFmt = (offset: number) =>
   new Date(Date.now() + offset * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 const shortLabel = (dateStr: string) =>

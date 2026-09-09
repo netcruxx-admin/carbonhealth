@@ -8,6 +8,9 @@ bcrypt>=4.2
 alembic>=1.13
 # Multipart bodies — registration document uploads (POST /hospitals/{id}/documents).
 python-multipart>=0.0.20
+# Image inspection — a letterhead upload is checked for A4 proportions and a
+# print-worthy resolution before it is stored (routers/hospitals.py).
+Pillow>=10.4
 psycopg[binary]>=3.2
 # Cloudflare R2, over its S3-compatible API (STORAGE_BACKEND=r2). Imported lazily
 # in app/storage.py, so the local backend runs without it.

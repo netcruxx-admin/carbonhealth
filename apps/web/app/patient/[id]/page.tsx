@@ -394,7 +394,7 @@ export default function PatientDetailPage() {
                     <p className="text-sm text-slate-700 mt-1">{r.tests.join(', ')}</p>
                   </div>
                   {r.ready ? (
-                    <Link href={`/report/${r.order.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm shrink-0">View Report</Link>
+                    <Link href={`/print/lab-report/${r.order.id}`} className="text-cyan-600 hover:text-cyan-700 font-semibold text-sm shrink-0">View Report</Link>
                   ) : (
                     <span className="text-sm text-slate-400 shrink-0">Pending</span>
                   )}

@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from .. import consent as consent_lib, models, pricing, schemas, storage
+from .. import consent as consent_lib, models, pricing, printing, schemas
 from ..auth import get_current_user
 from ..authz import SCOPE_OWN, caller_patient_id, own_record_filter, require_permission
 from ..config import settings
@@ -319,31 +319,11 @@ def get_invoice(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
 
     hospital = db.get(models.Hospital, tenant_id)
-    profile = (
-        db.query(models.HospitalProfile)
-        .filter(models.HospitalProfile.hospital_id == tenant_id)
-        .first()
-    )
-    address = ", ".join(
-        part for part in (
-            getattr(profile, "address_line1", "") or "",
-            getattr(profile, "address_line2", "") or "",
-            getattr(profile, "city", "") or "",
-            getattr(profile, "state", "") or "",
-            getattr(profile, "pincode", "") or "",
-        ) if part
-    ) if profile else ""
-
-    seller = schemas.InvoiceSeller(
-        name=hospital.name if hospital else "",
-        legal_name=(hospital.legal_name or "") if hospital else "",
-        gstin=(hospital.gstin or "") if hospital else "",
-        address=address,
-        phone=(profile.phone_primary or "") if profile else "",
-        email=(profile.email or "") if profile else "",
-        letterhead_url=storage.public_url(profile.letterhead_url if profile else ""),
-        logo_url=storage.public_url(profile.logo_url if profile else ""),
-    )
+    # The seller block — legal name, GSTIN, letterhead, logo — is the same
+    # hospital identity that goes on top of a lab report or a prescription, so
+    # it is composed in one place. `InvoiceSeller` ignores the `signature_url`
+    # key the helper also returns; the GSTIN it keeps.
+    seller = schemas.InvoiceSeller(**printing.build_print_header(db, tenant_id))
 
     # Both helpers take an iterable and answer with a dict — one query, and the
     # tenant is passed so a foreign id can never be resolved to a real name.

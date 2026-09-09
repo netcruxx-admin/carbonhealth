@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import { FormField } from '@/components/form/FormField';
 import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
+import { LetterheadCropModal } from '@/components/admin/LetterheadCropModal';
+import { LetterheadMarginPicker } from '@/components/admin/LetterheadMarginPicker';
 import { FormattedDate } from '@/components/ui/FormattedDate';
 import { apiError } from '@/lib/apiError';
 import { hasPermission } from '@/lib/auth';
@@ -26,6 +28,7 @@ import {
   useGetRazorpaySettingsQuery,
   useUpdateRazorpaySettingsMutation,
   type HospitalSelfUpdateBody,
+  type LetterheadMargins,
 } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -237,6 +240,25 @@ export function HospitalSettings({ session }: RoleViewProps) {
   const hospital = data?.hospital;
   const profile = data?.profile;
 
+  // The letterhead setup flow. 'crop' → 'margins' → save. `src` is the image as
+  // it was picked, kept so "Back to crop" works after a crop. 'adjust' re-opens
+  // the margin picker over the already-stored letterhead to change margins only.
+  type LhSrc = { file: File; url: string };
+  const [lhEditor, setLhEditor] = useState<
+    | { mode: 'crop'; src: LhSrc }
+    | { mode: 'margins'; file: File; url: string; src: LhSrc }
+    | { mode: 'adjust' }
+    | null
+  >(null);
+  const [lhSaving, setLhSaving] = useState(false);
+
+  const currentMargins: LetterheadMargins = {
+    top: profile?.letterheadMarginTopMm ?? 48,
+    bottom: profile?.letterheadMarginBottomMm ?? 32,
+    left: profile?.letterheadMarginLeftMm ?? 18,
+    right: profile?.letterheadMarginRightMm ?? 18,
+  };
+
   const initialValues = {
     name: hospital?.name ?? '',
     tagline: hospital?.tagline ?? '',
@@ -308,15 +330,81 @@ export function HospitalSettings({ session }: RoleViewProps) {
     }
   };
 
-  const pickLetterhead = async (files: FileList | null) => {
+  const pickLetterhead = (files: FileList | null) => {
     const file = Array.from(files ?? [])[0];
     if (letterheadInput.current) letterheadInput.current.value = '';
     if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const ratio = img.naturalWidth / img.naturalHeight;
+      const alreadyA4 =
+        img.naturalWidth <= img.naturalHeight &&
+        Math.abs(ratio - 210 / 297) <= 0.03 &&
+        img.naturalWidth >= 1000 &&
+        img.naturalHeight >= 1414;
+      // A ready-made A4 page skips the crop step; anything else gets cropped
+      // in-app rather than bounced back to an image editor.
+      setLhEditor(
+        alreadyA4
+          ? { mode: 'margins', file, url, src: { file, url } }
+          : { mode: 'crop', src: { file, url } },
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      toast.error('Could not read that image.');
+    };
+    img.src = url;
+  };
+
+  const closeLhEditor = () => {
+    if (lhEditor && lhEditor.mode !== 'adjust') {
+      URL.revokeObjectURL(lhEditor.src.url);
+      if (lhEditor.mode === 'margins' && lhEditor.url !== lhEditor.src.url) {
+        URL.revokeObjectURL(lhEditor.url);
+      }
+    }
+    setLhEditor(null);
+  };
+
+  const onCropped = (croppedFile: File, croppedUrl: string) => {
+    setLhEditor((prev) =>
+      prev && prev.mode === 'crop'
+        ? { mode: 'margins', file: croppedFile, url: croppedUrl, src: prev.src }
+        : prev,
+    );
+  };
+
+  const backToCrop = () => {
+    setLhEditor((prev) => {
+      if (!prev || prev.mode !== 'margins') return prev;
+      if (prev.url !== prev.src.url) URL.revokeObjectURL(prev.url);
+      return { mode: 'crop', src: prev.src };
+    });
+  };
+
+  const saveLetterhead = async (margins: LetterheadMargins) => {
+    if (!lhEditor || lhEditor.mode === 'crop') return;
+    const isNew = lhEditor.mode === 'margins';
+    setLhSaving(true);
     try {
-      await uploadLetterhead(file).unwrap();
-      toast.success('Letterhead updated');
+      if (isNew) {
+        await uploadLetterhead(lhEditor.file).unwrap();
+      }
+      await save({
+        letterheadMarginTopMm: margins.top,
+        letterheadMarginBottomMm: margins.bottom,
+        letterheadMarginLeftMm: margins.left,
+        letterheadMarginRightMm: margins.right,
+      }).unwrap();
+      toast.success(isNew ? 'Letterhead updated' : 'Printable area updated');
+      closeLhEditor();
     } catch (err) {
-      toast.error(apiError(err, 'Could not upload the letterhead'));
+      toast.error(apiError(err, 'Could not save the letterhead'));
+    } finally {
+      setLhSaving(false);
     }
   };
 
@@ -448,10 +536,10 @@ export function HospitalSettings({ session }: RoleViewProps) {
           <Section
             icon={FileText}
             title="Letterhead"
-            blurb="Printed across the top of bills. Without one, bills show your name and address as text."
+            blurb="A full-page A4 design that bills and reports print on top of. Without one, they show your name and address as text."
           >
             <div className="flex flex-wrap items-center gap-5">
-              <div className="w-40 h-24 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
+              <div className="h-32 w-24 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
                 {profile?.letterheadUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={profile.letterheadUrl} alt="Letterhead" className="w-full h-full object-contain" />
@@ -480,21 +568,62 @@ export function HospitalSettings({ session }: RoleViewProps) {
                       : profile?.letterheadUrl ? 'Replace' : 'Upload letterhead'}
                   </button>
                   {profile?.letterheadUrl && canEdit && (
-                    <button
-                      type="button"
-                      onClick={dropLetterhead}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition"
-                    >
-                      <Trash2 className="w-4 h-4" /> Remove
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setLhEditor({ mode: 'adjust' })}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                      >
+                        Adjust printable area
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dropLetterhead}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-500 hover:text-red-600 hover:border-red-200 transition"
+                      >
+                        <Trash2 className="w-4 h-4" /> Remove
+                      </button>
+                    </>
                   )}
                 </div>
                 <p className="text-xs text-slate-400">
-                  PNG, JPEG or WebP. A wide banner works best — roughly 1600&times;400.
+                  PNG, JPEG or WebP. You crop it to A4 and mark where your header and footer end, so
+                  printed content stays clear of them. Best results from a design at least
+                  1240&thinsp;&times;&thinsp;1754&thinsp;px.
                 </p>
               </div>
             </div>
           </Section>
+
+          {lhEditor?.mode === 'crop' && (
+            <LetterheadCropModal
+              imageUrl={lhEditor.src.url}
+              fileName={lhEditor.src.file.name}
+              onCancel={closeLhEditor}
+              onCropped={onCropped}
+            />
+          )}
+
+          {lhEditor?.mode === 'margins' && (
+            <LetterheadMarginPicker
+              imageUrl={lhEditor.url}
+              initial={currentMargins}
+              busy={lhSaving}
+              onBack={backToCrop}
+              onCancel={closeLhEditor}
+              onSave={saveLetterhead}
+            />
+          )}
+
+          {lhEditor?.mode === 'adjust' && profile?.letterheadUrl && (
+            <LetterheadMarginPicker
+              imageUrl={profile.letterheadUrl}
+              initial={currentMargins}
+              busy={lhSaving}
+              onCancel={closeLhEditor}
+              onSave={saveLetterhead}
+            />
+          )}
 
           <Formik initialValues={initialValues} validationSchema={schema} onSubmit={submit} enableReinitialize>
             {({ values, setFieldValue }) => (

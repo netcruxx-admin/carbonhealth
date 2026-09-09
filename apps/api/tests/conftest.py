@@ -325,6 +325,19 @@ def _build_tenant(client: TestClient, name: str, subdomain: str, category: str) 
     return tenant
 
 
+def a4_letterhead_png() -> bytes:
+    """A real PNG the letterhead upload will accept — A4 portrait proportions,
+    comfortably above the resolution floor the endpoint enforces. Pillow is a
+    dependency now, so building one here beats carrying a base64 blob around."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGB", (1240, 1754), "white").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 @pytest.fixture(scope="session")
 def hospital_a(client, database) -> Tenant:
     return _build_tenant(client, "Alpha Womens Clinic", "alpha", "maternity")
