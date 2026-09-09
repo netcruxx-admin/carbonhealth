@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Baby as BabyIcon, Plus, X, Search, Syringe, LineChart as LineChartIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import type { Baby, Immunization } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useAddGrowthMutation,
   useCreateBabyMutation,
@@ -41,6 +42,9 @@ export function DoctorNewborns({ session }: RoleViewProps) {
   });
   const babies = babyPage?.items ?? [];
   const totalBabies = babyPage?.total ?? 0;
+  // Nurse holds babies.read but not babies.manage — same list, read-only: no
+  // registration, no growth entries, no marking a vaccine given.
+  const canManage = hasPermission(session, 'babies.manage');
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Newborns" subtitle="Growth tracking & immunisations">
@@ -55,9 +59,11 @@ export function DoctorNewborns({ session }: RoleViewProps) {
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
-          <button onClick={() => setShowRegister(true)} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
-            <Plus className="w-4 h-4" /> Register newborn
-          </button>
+          {canManage && (
+            <button onClick={() => setShowRegister(true)} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95">
+              <Plus className="w-4 h-4" /> Register newborn
+            </button>
+          )}
         </div>
 
         {isLoading ? (
@@ -93,8 +99,8 @@ export function DoctorNewborns({ session }: RoleViewProps) {
       </div>
 
       {showRegister && <RegisterBabyModal onClose={() => setShowRegister(false)} onSaved={() => setShowRegister(false)} />}
-      {growthFor && <GrowthModal baby={growthFor} onClose={() => setGrowthFor(null)} />}
-      {immFor && <ImmunizationModal baby={immFor} onClose={() => setImmFor(null)} />}
+      {growthFor && <GrowthModal baby={growthFor} canManage={canManage} onClose={() => setGrowthFor(null)} />}
+      {immFor && <ImmunizationModal baby={immFor} canManage={canManage} onClose={() => setImmFor(null)} />}
     </DashboardShell>
   );
 }
@@ -236,7 +242,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   );
 }
 
-function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
+function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: boolean; onClose: () => void }) {
   const [date, setDate] = useState(today());
   const [weight, setWeight] = useState(0);
   const [height, setHeight] = useState(0);
@@ -271,7 +277,9 @@ function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
           <Field label="Length (cm)"><input type="number" step="0.1" value={height || ''} onChange={(e) => setHeight(+e.target.value)} className={inputCls} /></Field>
           <Field label="Head circ. (cm)"><input type="number" step="0.1" value={head || ''} onChange={(e) => setHead(+e.target.value)} className={inputCls} /></Field>
         </div>
-        <button onClick={add} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold">Add measurement</button>
+        {canManage && (
+          <button onClick={add} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold">Add measurement</button>
+        )}
 
         <div className="pt-2">
           <p className="text-xs font-medium text-slate-500 mb-1">Recorded measurements</p>
@@ -293,7 +301,7 @@ function GrowthModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
   );
 }
 
-function ImmunizationModal({ baby, onClose }: { baby: Baby; onClose: () => void }) {
+function ImmunizationModal({ baby, canManage, onClose }: { baby: Baby; canManage: boolean; onClose: () => void }) {
   const { data: imms = [] } = useListImmunizationsQuery(baby.id);
   const [markGiven] = useMarkImmunizationGivenMutation();
   const [error, setError] = useState('');
@@ -327,10 +335,14 @@ function ImmunizationModal({ baby, onClose }: { baby: Baby; onClose: () => void 
                     <span className="text-slate-700">{i.vaccine}</span>
                     {i.status === 'given' ? (
                       <span className="inline-flex items-center gap-1 text-green-600 text-xs"><CheckCircle2 className="w-3.5 h-3.5" /> Given {i.givenDate}</span>
-                    ) : (
+                    ) : canManage ? (
                       <button onClick={() => give(i.id)} className={`text-xs font-medium px-2 py-1 rounded-md border ${st === 'overdue' ? 'border-amber-300 text-amber-700 hover:bg-amber-50' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
                         Mark given
                       </button>
+                    ) : (
+                      <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${st === 'overdue' ? 'bg-red-100 text-red-700' : st === 'due' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {st === 'overdue' ? 'Overdue' : st === 'due' ? 'Due now' : 'Upcoming'}
+                      </span>
                     )}
                   </div>
                 );

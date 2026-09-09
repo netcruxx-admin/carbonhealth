@@ -84,15 +84,22 @@ def test_a_public_bucket_stores_the_public_url(r2, monkeypatch):
     assert list(r2.objects) == [url[len("https://files.example.com/"):]]
 
 
-def test_public_url_leaves_an_already_fetchable_url_alone(r2, monkeypatch):
-    """Local paths and public R2 URLs are served as stored."""
+def test_public_url_leaves_a_public_r2_url_alone(r2, monkeypatch):
+    """A public R2 URL is already absolute and fetchable, so it is served as stored."""
     monkeypatch.setattr(settings, "r2_public_url", "https://files.example.com")
     url, _, _ = _save()
     assert storage.public_url(url) == url
-    assert storage.public_url("/files/hosp-1/file-abc-scan.pdf") == (
-        "/files/hosp-1/file-abc-scan.pdf"
-    )
     assert storage.public_url("") == ""
+
+
+def test_public_url_makes_a_local_relative_path_absolute(r2, monkeypatch):
+    """A local-disk path is stored host-relative, but the browser renders it on
+    the frontend's own origin — resolved here against API_PUBLIC_URL so it
+    points at the API instead."""
+    monkeypatch.setattr(settings, "api_public_url", "https://api.example.com")
+    assert storage.public_url("/files/hosp-1/file-abc-scan.pdf") == (
+        "https://api.example.com/files/hosp-1/file-abc-scan.pdf"
+    )
 
 
 def test_a_legacy_opaque_uri_is_signed_on_the_way_out(r2):
@@ -161,10 +168,10 @@ def test_the_content_type_allowlist_holds(r2):
     assert r2.objects == {}
 
 
-def test_local_disk_stores_and_serves_the_same_path(local):
+def test_local_disk_stores_a_relative_path_served_absolute(local):
     url, original, size = _save(name="cert.png", content_type="image/png")
     assert url.startswith(f"{settings.files_url_prefix}/hosp-1/")
-    assert storage.public_url(url) == url
+    assert storage.public_url(url) == f"{settings.api_public_url}{url}"
     assert size == len(PNG)
 
     stored = local / "hosp-1" / url.rsplit("/", 1)[1]

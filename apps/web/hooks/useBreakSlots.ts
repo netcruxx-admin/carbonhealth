@@ -43,15 +43,34 @@ export function useBreakSlots(slots?: string[]): Set<string> {
 /**
  * Returns { slots, breakSlots } — the slot list AND the blocked-for-lunch set.
  * Use this in booking components so both are derived from the same fetch.
+ *
+ * Pass `restrictToWindow: true` to also fold the hospital's patient
+ * self-booking window (if the admin has set one) into `breakSlots`, so slots
+ * outside it render the same "blocked" way lunch-break slots already do.
+ * Only the patient booking screen should pass this — receptionist/admin
+ * booking stays unrestricted.
  */
-export function useHospitalSlots(): { slots: string[]; breakSlots: Set<string> } {
+export function useHospitalSlots(
+  options?: { restrictToWindow?: boolean },
+): { slots: string[]; breakSlots: Set<string> } {
   const { data } = useGetHospitalOperationalQuery();
   const stepMinutes = data?.appointmentSlotMinutes ?? 15;
   const start = data?.lunchBreakStart ?? '12:00';
   const end   = data?.lunchBreakEnd   ?? '14:00';
+  const windowStart = data?.patientBookingWindowStart;
+  const windowEnd   = data?.patientBookingWindowEnd;
 
   const slots = useMemo(() => generateSlots(stepMinutes), [stepMinutes]);
-  const breakSlots = useMemo(() => breakSlotsFromRange(start, end, slots), [start, end, slots]);
+  const breakSlots = useMemo(() => {
+    const blocked = breakSlotsFromRange(start, end, slots);
+    if (options?.restrictToWindow && windowStart && windowEnd) {
+      const inWindow = breakSlotsFromRange(windowStart, windowEnd, slots);
+      for (const slot of slots) {
+        if (!inWindow.has(slot)) blocked.add(slot);
+      }
+    }
+    return blocked;
+  }, [start, end, slots, options?.restrictToWindow, windowStart, windowEnd]);
 
   return { slots, breakSlots };
 }

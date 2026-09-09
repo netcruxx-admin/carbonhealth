@@ -79,6 +79,47 @@
   --sidebar-ring: #06b6d4;
 }
 
+/* Per-hospital brand color, scoped to the dashboard shell.
+ *
+ * DashboardShell sets --brand-primary/--brand-primary-dark inline from the
+ * signed-in hospital's own theme (falling back to the platform's cyan/teal
+ * when a tenant hasn't picked one). Every cyan-*/teal-*/brand-teal utility
+ * class used across the dashboard (bg-, text-, border-, ring-, from-, to-,
+ * hover:, focus:, ...) already compiles down to var(--color-cyan-N)/
+ * var(--color-teal-N)/var(--brand-teal) — see utilities.css. Overriding those
+ * tokens here, on the class that wraps the dashboard, repaints every one of
+ * them for that tenant without touching the ~80 files that use them: a value
+ * set on an element always wins over the inherited :root default, so nothing
+ * outside .hospital-branded (the login page, marketing pages) is affected.
+ */
+.hospital-branded {
+  --color-cyan-50: color-mix(in oklab, var(--brand-primary) 8%, white);
+  --color-cyan-100: color-mix(in oklab, var(--brand-primary) 16%, white);
+  --color-cyan-200: color-mix(in oklab, var(--brand-primary) 28%, white);
+  --color-cyan-300: color-mix(in oklab, var(--brand-primary) 45%, white);
+  --color-cyan-400: color-mix(in oklab, var(--brand-primary) 72%, white);
+  --color-cyan-500: var(--brand-primary);
+  --color-cyan-600: color-mix(in oklab, var(--brand-primary) 90%, black);
+  --color-cyan-700: var(--brand-primary-dark);
+  --color-cyan-800: color-mix(in oklab, var(--brand-primary-dark) 80%, black);
+
+  --color-teal-50: color-mix(in oklab, var(--brand-primary-dark) 8%, white);
+  --color-teal-100: color-mix(in oklab, var(--brand-primary-dark) 16%, white);
+  --color-teal-500: var(--brand-primary-dark);
+  --color-teal-600: color-mix(in oklab, var(--brand-primary-dark) 90%, black);
+  --color-teal-700: color-mix(in oklab, var(--brand-primary-dark) 78%, black);
+  --color-teal-800: color-mix(in oklab, var(--brand-primary-dark) 65%, black);
+
+  --brand-teal: var(--brand-primary-dark);
+
+  /* The shared shadcn Button/UI primitives (bg-primary, ring, etc.) — a
+     handful of components read these instead of the raw cyan/teal scale. */
+  --primary: var(--brand-primary);
+  --ring: var(--brand-primary);
+  --sidebar-primary: var(--brand-primary);
+  --sidebar-ring: var(--brand-primary);
+}
+
 @theme inline {
   --font-sans: 'Geist', 'Geist Fallback';
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';

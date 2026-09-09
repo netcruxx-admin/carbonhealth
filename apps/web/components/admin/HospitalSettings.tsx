@@ -5,7 +5,7 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import {
   Building2, MapPin, Phone, UserCog, BedDouble, Clock, Image as ImageIcon,
-   Upload, Trash2,
+   Upload, Trash2, Palette,
   ShieldCheck, FileText, CreditCard, Lock, Smartphone, CheckCircle2, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -275,8 +275,14 @@ export function HospitalSettings({ session }: RoleViewProps) {
     appointmentSlotMinutes: profile?.appointmentSlotMinutes ?? 15,
     lunchBreakStart: profile?.lunchBreakStart ?? '12:00',
     lunchBreakEnd: profile?.lunchBreakEnd ?? '14:00',
+    patientBookingWindowStart: profile?.patientBookingWindowStart ?? '',
+    patientBookingWindowEnd: profile?.patientBookingWindowEnd ?? '',
     signatureUrl: profile?.signatureUrl ?? '',
     notes: profile?.notes ?? '',
+    theme: {
+      primary: hospital?.theme?.primary ?? '#00509f',
+      primaryDark: hospital?.theme?.primaryDark ?? '#019695',
+    },
   };
 
   const pickLogo = async (files: FileList | null) => {
@@ -327,6 +333,16 @@ export function HospitalSettings({ session }: RoleViewProps) {
     setError('');
     if (values.lunchBreakStart >= values.lunchBreakEnd) {
       setError('Break end time must be after start time');
+      return;
+    }
+    const bookingStart = values.patientBookingWindowStart;
+    const bookingEnd = values.patientBookingWindowEnd;
+    if (Boolean(bookingStart) !== Boolean(bookingEnd)) {
+      setError('Set both an opening and closing time for online booking, or leave both blank');
+      return;
+    }
+    if (bookingStart && bookingEnd && bookingStart >= bookingEnd) {
+      setError('Online booking closing time must be after the opening time');
       return;
     }
     try {
@@ -491,6 +507,43 @@ export function HospitalSettings({ session }: RoleViewProps) {
                     </div>
                   </Section>
 
+                  <Section
+                    icon={Palette}
+                    title="Brand color"
+                    blurb="Colours the sidebar, header and buttons across your hospital's dashboard."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Primary colour</label>
+                        <div className="flex items-center gap-2 h-9">
+                          <input
+                            type="color"
+                            value={values.theme.primary}
+                            onChange={(e) => setFieldValue('theme.primary', e.target.value)}
+                            className="h-9 w-12 rounded border border-slate-300 cursor-pointer"
+                          />
+                          <span className="text-xs font-mono text-slate-500">{values.theme.primary}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Accent colour</label>
+                        <div className="flex items-center gap-2 h-9">
+                          <input
+                            type="color"
+                            value={values.theme.primaryDark}
+                            onChange={(e) => setFieldValue('theme.primaryDark', e.target.value)}
+                            className="h-9 w-12 rounded border border-slate-300 cursor-pointer"
+                          />
+                          <span className="text-xs font-mono text-slate-500">{values.theme.primaryDark}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      className="mt-4 h-12 rounded-lg"
+                      style={{ backgroundImage: `linear-gradient(to right, ${values.theme.primary}, ${values.theme.primaryDark})` }}
+                    />
+                  </Section>
+
                   <Section icon={MapPin} title="Address">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <AddressAutocomplete label="Address line 1" placeholder="Building, street or search…" />
@@ -562,6 +615,17 @@ export function HospitalSettings({ session }: RoleViewProps) {
                       <FormField name="timezone" label="Timezone" />
                       <FormField name="lunchBreakStart" label="Break starts" type="time" />
                       <FormField name="lunchBreakEnd" label="Break ends" type="time" />
+                    </div>
+                  </Section>
+
+                  <Section
+                    icon={Clock}
+                    title="Online booking hours"
+                    blurb="Limits only when a patient books themselves. Reception can still book any open slot for a walk-in."
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <FormField name="patientBookingWindowStart" label="Booking opens" type="time" />
+                      <FormField name="patientBookingWindowEnd" label="Booking closes" type="time" />
                     </div>
                   </Section>
 

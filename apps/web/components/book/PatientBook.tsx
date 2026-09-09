@@ -173,7 +173,7 @@ export function PatientBook({ session }: RoleViewProps) {
   const [createAppointment] = useCreateAppointmentMutation();
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
-  const { slots: SLOTS, breakSlots } = useHospitalSlots();
+  const { slots: SLOTS, breakSlots } = useHospitalSlots({ restrictToWindow: true });
 
   // Doctors in the selected department, capped at MAX_DEPT so hook count is fixed.
   const deptDoctors = useMemo<Doctor[]>(() => {

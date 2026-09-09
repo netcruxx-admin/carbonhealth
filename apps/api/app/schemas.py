@@ -269,6 +269,10 @@ class HospitalProfileBase(CamelModel):
     # Lunch break window — HH:MM 24-hour, end exclusive.
     lunch_break_start: str = "12:00"
     lunch_break_end: str = "14:00"
+    # Patient self-booking window — HH:MM 24-hour, end exclusive. None means
+    # a patient may book any open slot online.
+    patient_booking_window_start: Optional[str] = None
+    patient_booking_window_end: Optional[str] = None
     invoice_prefix: str = "INV"
     invoice_series_start: int = 1
     mrn_prefix: str = "MRN"
@@ -403,6 +407,8 @@ class HospitalSelfUpdate(CamelModel):
     appointment_slot_minutes: Optional[int] = None
     lunch_break_start: Optional[str] = None
     lunch_break_end: Optional[str] = None
+    patient_booking_window_start: Optional[str] = None
+    patient_booking_window_end: Optional[str] = None
 
     # --- Branding assets ---
     logo_url: Optional[str] = None
@@ -460,6 +466,10 @@ class HospitalOperationalOut(CamelModel):
     lunch_break_start: str = "12:00"
     lunch_break_end: str = "14:00"
     appointment_slot_minutes: int = 15
+    # Patient self-booking window — None means unrestricted. Only PatientBook
+    # filters on this; receptionist/admin booking screens ignore it.
+    patient_booking_window_start: Optional[str] = None
+    patient_booking_window_end: Optional[str] = None
 
 
 class HospitalOperationalUpdate(CamelModel):

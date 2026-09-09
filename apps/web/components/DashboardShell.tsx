@@ -100,9 +100,14 @@ export function DashboardShell({
     };
 
   // Paint the active tenant's brand colours so each hospital looks distinct.
-  const brandGradient = {
-    backgroundImage: `linear-gradient(to bottom right, ${hospital.theme.primary}, ${hospital.theme.primaryDark})`,
-  };
+  // These feed the .hospital-branded rule in globals.css, which remaps every
+  // cyan-*/teal-*/brand-teal utility class used across the dashboard — the
+  // sidebar's active state, buttons, badges, focus rings — to this tenant's
+  // colours. Scoped to the wrapper below, so the login page is unaffected.
+  const brandVars = {
+    '--brand-primary': hospital.theme.primary,
+    '--brand-primary-dark': hospital.theme.primaryDark,
+  } as React.CSSProperties;
   const brandText = {
     backgroundImage: `linear-gradient(to right, ${hospital.theme.primary}, ${hospital.theme.primaryDark})`,
     WebkitBackgroundClip: 'text',
@@ -298,7 +303,7 @@ export function DashboardShell({
 
   if (consentGateActive) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="hospital-branded min-h-screen bg-slate-50 flex items-center justify-center p-6" style={brandVars}>
         <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-8 text-center space-y-5">
           <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
             <ShieldCheck className="w-7 h-7 text-amber-600" />
@@ -329,7 +334,7 @@ export function DashboardShell({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="hospital-branded min-h-screen bg-slate-50" style={brandVars}>
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-30 flex items-center justify-between bg-white border-b border-slate-200 px-4 h-14">
         <button

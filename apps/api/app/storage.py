@@ -264,12 +264,13 @@ def delete_file(url: str) -> None:
 def public_url(url: str) -> str:
     """Return a browser-fetchable URL for a stored file URL.
 
-    Local backend stores the full path already (e.g. ``/files/folder/name``),
-    so it is returned unchanged.  R2 stores either the public CDN URL (when
-    ``R2_PUBLIC_URL`` is set) or the raw S3-compatible URL — both are already
-    fetchable by the browser and returned unchanged.  If a legacy ``r2://``
-    opaque URI is found (from an older storage scheme), it is converted to a
-    presigned URL so the browser can still open it.
+    Local backend stores a host-relative path (e.g. ``/files/folder/name``);
+    that is resolved here against ``API_PUBLIC_URL`` since the frontend runs on
+    its own origin and a bare path would resolve against *that* one instead.
+    R2 stores either the public CDN URL (when ``R2_PUBLIC_URL`` is set) or the
+    raw S3-compatible URL — both are already absolute and returned unchanged.
+    If a legacy ``r2://`` opaque URI is found (from an older storage scheme),
+    it is converted to a presigned URL so the browser can still open it.
     """
     if not url:
         return url
@@ -291,7 +292,11 @@ def public_url(url: str) -> str:
         except Exception:
             return url
 
-    # Already a full URL (local path or R2 public/S3 URL).
+    # A host-relative local-disk path — make it absolute against this API.
+    if url.startswith("/"):
+        return f"{settings.api_public_url.rstrip('/')}{url}"
+
+    # Already a full URL (R2 public/S3 URL).
     return url
 
 

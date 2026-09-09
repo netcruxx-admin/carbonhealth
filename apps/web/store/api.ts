@@ -160,6 +160,8 @@ export interface HospitalProfileBody {
   appointmentSlotMinutes?: number;
   lunchBreakStart?: string;
   lunchBreakEnd?: string;
+  patientBookingWindowStart?: string;
+  patientBookingWindowEnd?: string;
   invoicePrefix?: string;
   invoiceSeriesStart?: number;
   mrnPrefix?: string;
@@ -197,6 +199,7 @@ export type HospitalSelfUpdateBody = Pick<
   | 'hasAmbulance' | 'specialties'
   | 'timezone' | 'locale' | 'opdHours' | 'weeklyOff' | 'appointmentSlotMinutes'
   | 'lunchBreakStart' | 'lunchBreakEnd'
+  | 'patientBookingWindowStart' | 'patientBookingWindowEnd'
   | 'logoUrl' | 'letterheadUrl' | 'signatureUrl' | 'notes'
 > & {
   name?: string;
@@ -270,6 +273,9 @@ export interface HospitalOperational {
   lunchBreakStart: string;
   lunchBreakEnd: string;
   appointmentSlotMinutes: number;
+  /** Patient self-booking window — undefined/null means unrestricted. */
+  patientBookingWindowStart?: string | null;
+  patientBookingWindowEnd?: string | null;
 }
 
 export type LicenceStatus = 'pending' | 'active' | 'expired' | 'rejected';

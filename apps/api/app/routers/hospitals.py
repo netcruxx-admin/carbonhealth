@@ -774,6 +774,8 @@ def current_operational(
         lunch_break_start=profile.lunch_break_start or "12:00",
         lunch_break_end=profile.lunch_break_end or "14:00",
         appointment_slot_minutes=profile.appointment_slot_minutes or 15,
+        patient_booking_window_start=profile.patient_booking_window_start,
+        patient_booking_window_end=profile.patient_booking_window_end,
     )
 
 

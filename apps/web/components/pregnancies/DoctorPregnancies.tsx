@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Baby, Plus, X, AlertTriangle, Search } from 'lucide-react';
 import type { PregnancyRecord } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
+import { hasPermission } from '@/lib/auth';
 import {
   useCreateAncVisitMutation,
   useGetDoctorByUserQuery,
@@ -41,6 +42,9 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
   const totalRecords = pregnancyPage?.total ?? 0;
   const { data: doctor } = useGetDoctorByUserQuery(session.user.id);
   const doctorId = doctor?.id ?? '';
+  // Nurse holds pregnancies.read but not pregnancies.manage — same list,
+  // read-only: no new records, no antenatal visits.
+  const canManage = hasPermission(session, 'pregnancies.manage');
 
   return (
     <DashboardShell
@@ -70,12 +74,14 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
             <option value="delivered">Delivered</option>
             <option value="closed">Closed</option>
           </select>
-          <button
-            onClick={() => setShowNew(true)}
-            className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
-          >
-            <Plus className="w-4 h-4" /> New pregnancy record
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowNew(true)}
+              className="ml-auto inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold px-4 py-2 shadow hover:opacity-95"
+            >
+              <Plus className="w-4 h-4" /> New pregnancy record
+            </button>
+          )}
         </div>
 
         {isLoading ? (
@@ -83,7 +89,11 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
         ) : records.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <Baby className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-            <p className="text-sm">No pregnancy records yet. Create one to start antenatal tracking.</p>
+            <p className="text-sm">
+              {canManage
+                ? 'No pregnancy records yet. Create one to start antenatal tracking.'
+                : 'No pregnancy records yet.'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -114,12 +124,14 @@ export function DoctorPregnancies({ session }: RoleViewProps) {
                       {risks.length} flag{risks.length === 1 ? '' : 's'}
                     </div>
                   )}
-                  <button
-                    onClick={() => setVisitFor(r)}
-                    className="mt-3 w-full text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50"
-                  >
-                    + Add antenatal visit
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={() => setVisitFor(r)}
+                      className="mt-3 w-full text-sm font-medium text-cyan-700 border border-cyan-200 rounded-lg py-2 hover:bg-cyan-50"
+                    >
+                      + Add antenatal visit
+                    </button>
+                  )}
                 </div>
               );
             })}

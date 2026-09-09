@@ -185,6 +185,12 @@ class HospitalProfile(Base):
     # Slots that fall within [start, end) are blocked in the booking UI.
     lunch_break_start = Column(String, default="12:00")
     lunch_break_end = Column(String, default="14:00")
+    # Patient self-booking window — HH:MM 24-hour, end exclusive. NULL means
+    # unrestricted: a patient booking online may pick any open slot. Never
+    # applied to receptionist/admin bookings, only to a patient booking
+    # themselves.
+    patient_booking_window_start = Column(String, nullable=True)
+    patient_booking_window_end = Column(String, nullable=True)
     # Hospitals are opinionated about the shape of an invoice number and an MRN,
     # and both block go-live if they are wrong. `{prefix}{seq}` style tokens.
     invoice_prefix = Column(String, default="INV")

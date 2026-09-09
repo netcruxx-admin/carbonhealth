@@ -245,11 +245,14 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/pregnancies',
     label: 'Pregnancies',
     icon: Baby,
-    viewRoles: [doctorRole, patientRole],
+    viewRoles: [doctorRole, nurseRole, patientRole],
     permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
-    specialties: ['obstetric', 'gynec', 'gynaec', 'maternal'],
+    // Every doctor and nurse holding pregnancies.read sees this in the nav,
+    // not just ones labeled obstetric/gynec — a small hospital may not split
+    // that out as its own specialty. patientVisible below is unrelated to
+    // this and still narrows what a patient sees.
     patientVisible: (c) =>
       c.hasPregnancy || c.specializations.some((s) => /obstetric|gynec|gynaec|maternal/.test(s)),
   },
@@ -257,11 +260,13 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/babies',
     label: 'Newborns',
     icon: Baby,
-    viewRoles: [doctorRole, patientRole],
+    viewRoles: [doctorRole, nurseRole, patientRole],
     permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
-    specialties: ['neonat', 'pediatric', 'paediatric', 'child'],
+    // Every doctor and nurse holding babies.read sees this in the nav, not
+    // just ones labeled neonatal/pediatric. patientVisible below is
+    // unrelated to this and still narrows what a patient sees.
     patientVisible: (c) =>
       c.hasBaby || c.specializations.some((s) => /neonat|pediatric|paediatric|child/.test(s)),
   },

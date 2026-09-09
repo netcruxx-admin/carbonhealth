@@ -60,9 +60,9 @@ export const HOSPITAL_CATEGORIES: Record<HospitalCategoryId, HospitalCategory> =
       { id: 'dept-5', name: 'Pediatric Care', description: 'Child health and development' },
     ],
     signatureFeatures: [
-      { label: 'ANC / Pregnancy Tracker', description: 'EDD, trimester timeline, weight/BP charts, visit checklist.', built: false },
-      { label: 'High-Risk Pregnancy Flags', description: 'Auto-alerts from vitals (BP, low Hb, gestational diabetes).', built: false },
-      { label: 'Immunisation Schedule', description: 'TT for mother, newborn IAP vaccination reminders.', built: false },
+      { label: 'ANC / Pregnancy Tracker', description: 'EDD, trimester timeline, weight/BP charts, visit checklist.', built: true },
+      { label: 'High-Risk Pregnancy Flags', description: 'Auto-alerts from antenatal vitals (high BP, low hemoglobin).', built: true },
+      { label: 'Immunisation Schedule', description: 'Newborn IAP vaccination schedule with due/overdue reminders.', built: true },
     ],
   },
 

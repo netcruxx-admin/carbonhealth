@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # storage seam (app/storage.py) is written not to care which it is.
     upload_dir: str = "uploads"
     files_url_prefix: str = "/files"
+    # The origin this API is reachable at, used only to turn the local backend's
+    # `files_url_prefix`-relative path into a URL a browser can actually fetch.
+    # The frontend runs on its own origin (a different port in dev, a different
+    # subdomain in prod), so a bare "/files/..." resolves against *that* origin
+    # and 404s — it has to be absolute. R2 already returns absolute URLs and
+    # ignores this.
+    api_public_url: str = "http://localhost:8000"
     # Which implementation of that seam is live: "local" or "r2".
     storage_backend: str = "local"
     # --- Cloudflare R2 (STORAGE_BACKEND=r2) ---
@@ -106,7 +113,7 @@ class Settings(BaseSettings):
     # Strip every string field so int/bool coercion doesn't silently fail.
     @field_validator(
         "resend_api_key", "resend_from",
-        "cors_origins", "root_domain", "environment",
+        "cors_origins", "root_domain", "environment", "api_public_url",
         mode="before",
     )
     @classmethod

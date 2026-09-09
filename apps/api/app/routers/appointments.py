@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -27,6 +28,34 @@ from ..utils import (
 )
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
+
+
+def _slot_minutes(value: str) -> Optional[int]:
+    """Parse a time-of-day string to minutes since midnight.
+
+    Appointment times arrive as 12-hour slot labels ("09:00 AM"); the
+    hospital's booking-window bounds are admin-entered 24-hour "HH:MM"
+    strings. Both shapes are accepted here so the two can be compared.
+    Returns None if `value` matches neither shape.
+    """
+    value = value.strip()
+    ampm = re.match(r"^(\d{1,2}):(\d{2})\s*(AM|PM)$", value, re.IGNORECASE)
+    if ampm:
+        hour, minute, meridiem = int(ampm.group(1)), int(ampm.group(2)), ampm.group(3).upper()
+        if not (1 <= hour <= 12 and 0 <= minute < 60):
+            return None
+        if meridiem == "PM" and hour != 12:
+            hour += 12
+        if meridiem == "AM" and hour == 12:
+            hour = 0
+        return hour * 60 + minute
+    military = re.match(r"^(\d{1,2}):(\d{2})$", value)
+    if military:
+        hour, minute = int(military.group(1)), int(military.group(2))
+        if not (0 <= hour <= 23 and 0 <= minute < 60):
+            return None
+        return hour * 60 + minute
+    return None
 
 
 @router.get("", response_model=list[schemas.AppointmentOut])
@@ -141,8 +170,9 @@ def create_appointment(
     if scope == SCOPE_OWN:
         own_patient = caller_patient_id(db, user)
         own_doctor = caller_doctor_id(db, user)
+        patient_self_booking = own_patient is not None and body.patient_id == own_patient
         is_own_booking = (
-            (own_patient is not None and body.patient_id == own_patient)
+            patient_self_booking
             or (own_doctor is not None and body.doctor_id == own_doctor)
         )
         if not is_own_booking:
@@ -150,6 +180,29 @@ def create_appointment(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only book appointments you are part of",
             )
+        # A patient booking themselves online is limited to the hospital's
+        # configured booking hours, if any are set. Receptionist/admin
+        # bookings (scope "all") and a doctor's own follow-up booking are
+        # never restricted by this.
+        if patient_self_booking:
+            profile = (
+                db.query(models.HospitalProfile)
+                .filter(models.HospitalProfile.hospital_id == tenant_id)
+                .first()
+            )
+            window_start = profile.patient_booking_window_start if profile else None
+            window_end = profile.patient_booking_window_end if profile else None
+            if window_start and window_end:
+                start_min = _slot_minutes(window_start)
+                end_min = _slot_minutes(window_end)
+                time_min = _slot_minutes(body.time)
+                if time_min is None or start_min is None or end_min is None or not (
+                    start_min <= time_min < end_min
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="This time is outside the hospital's online booking hours",
+                    )
     # The body names three rows by id. None of them has been checked against the
     # caller's tenant yet — scope "own" above only constrains *who* the caller
     # is, not which hospital the ids belong to — so a booking could otherwise be
