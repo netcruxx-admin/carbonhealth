@@ -1,36 +1,20 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, CalendarPlus, Video } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
-import { toast } from 'sonner';
-import { FollowUpModal } from '@/components/FollowUpModal';
 import { useAppointmentDetail } from './useAppointmentDetail';
-import { ActionsToolbar } from './components/ActionsToolbar';
-import { AppointmentInfo } from './components/AppointmentInfo';
-import { ClinicalSections } from './components/ClinicalSections';
-import { RescheduleModal } from './components/RescheduleModal';
-import { EditAppointmentModal } from './components/EditAppointmentModal';
-import { RecordVitalsModal } from './components/RecordVitalsModal';
-import { EditVitalsModal } from './components/EditVitalsModal';
-import { AddPrescriptionModal } from './components/AddPrescriptionModal';
-import { EditPrescriptionModal } from './components/EditPrescriptionModal';
-import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
-import { AddInjectionOrderModal } from './components/AddInjectionOrderModal';
-import { OrderTestModal } from './components/OrderTestModal';
-import { ConfirmActionModal } from './components/ConfirmActionModal';
-import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
+import { AppointmentDetailsCard } from './components/AppointmentDetailsCard';
+import { VitalsSection } from './components/VitalsSection';
+import { PrescriptionsSection } from './components/PrescriptionsSection';
+import { ClinicalNotesSection } from './components/ClinicalNotesSection';
+import { InjectionOrdersSection } from './components/InjectionOrdersSection';
+import { LabOrdersSection } from './components/LabOrdersSection';
 import { useActiveHospital } from '@/hooks/useActiveHospital';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  useDeletePrescriptionMutation,
-  useCancelTestOrderMutation,
-  useDeleteVitalsMutation,
-} from '@/store/api';
-
-type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'edit-vitals' | 'rx' | 'edit-rx' | 'notes' | 'injection' | 'laborder' | 'followup' | null;
+import { ageFromDob } from '@/lib/date';
+import { formatRelationLine } from '@/components/patients/patientProfile';
 
 // Reused page shell for the loading / error states.
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -38,7 +22,7 @@ function Chrome({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
           <Image src="/logo/logo-full.png" alt={hospital.name} width={80} height={80} className="w-20 h-20 object-contain" />
         </div>
       </div>
@@ -47,8 +31,12 @@ function Chrome({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Everything about a visit lives on this one page, as one continuous flow of
+// titled sections — no cards, no popups, and no click-to-reveal: every form
+// that's usable is already open and ready to fill.
 export default function AppointmentDetailPage() {
   const router = useRouter();
+  const { modules } = useActiveHospital();
   const {
     appointmentId,
     loading,
@@ -57,97 +45,17 @@ export default function AppointmentDetailPage() {
     confirmAction,
     setConfirmAction,
     runConfirm,
-    refreshAppointment,
-    reloadDetails,
-    doctorName,
     patientName,
-    isPatient,
-    isAdmin,
     canManage,
     canOrderInjection,
     canManageClinicalNotes,
     canDeletePrescription,
     canDeleteVitals,
     canDeleteTestOrder,
-    canReschedule,
     canComplete,
     canCancel,
     medicineOptions,
   } = useAppointmentDetail();
-
-  const [modal, setModal] = useState<OpenModal>(null);
-  const [editRx, setEditRx] = useState<any>(null);
-  const [editVitals, setEditVitals] = useState<any>(null);
-  const [editRecord, setEditRecord] = useState<any>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{
-    type: 'rx' | 'vitals' | 'order';
-    id: string;
-    title: string;
-    body: string;
-    confirmLabel: string;
-  } | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const closeModal = () => { setModal(null); setEditRx(null); setEditVitals(null); setEditRecord(null); };
-  // Close a modal and refresh the page data with a toast.
-  const afterSave = (msg: string) => {
-    reloadDetails();
-    closeModal();
-    toast.success(msg);
-  };
-
-  const [deletePrescription] = useDeletePrescriptionMutation();
-  const [cancelTestOrder] = useCancelTestOrderMutation();
-  const [deleteVitals] = useDeleteVitalsMutation();
-
-  const handleDeletePrescription = (id: string) => {
-    setDeleteTarget({
-      type: 'rx', id,
-      title: 'Delete Prescription',
-      body: 'This will also remove the pending pharmacy order. This cannot be undone.',
-      confirmLabel: 'Delete Prescription',
-    });
-  };
-
-  const handleCancelTestOrder = (id: string) => {
-    setDeleteTarget({
-      type: 'order', id,
-      title: 'Cancel Lab Order',
-      body: 'Cancel this lab order? If the lab has already started processing it, cancellation will be blocked.',
-      confirmLabel: 'Cancel Order',
-    });
-  };
-
-  const handleDeleteVitals = (id: string) => {
-    setDeleteTarget({
-      type: 'vitals', id,
-      title: 'Delete Vitals',
-      body: 'Permanently delete this vitals record? This cannot be undone.',
-      confirmLabel: 'Delete Vitals',
-    });
-  };
-
-  const runDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      if (deleteTarget.type === 'rx') {
-        await deletePrescription(deleteTarget.id).unwrap();
-        toast.success('Prescription deleted');
-      } else if (deleteTarget.type === 'order') {
-        await cancelTestOrder(deleteTarget.id).unwrap();
-        toast.success('Lab order cancelled');
-      } else {
-        await deleteVitals(deleteTarget.id).unwrap();
-        toast.success('Vitals deleted');
-      }
-      setDeleteTarget(null);
-    } catch (err: any) {
-      toast.error(err?.data?.detail ?? 'Could not complete the action');
-      setDeleteTarget(null);
-    } finally {
-      setDeleteLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -176,235 +84,107 @@ export default function AppointmentDetailPage() {
   }
 
   const appointment = details.appointment;
+  const patient = details.patient;
+  const relationLine = patient ? formatRelationLine(patient.relationType, patient.relationName) : '';
+  const age = patient ? ageFromDob(patient.dateOfBirth) : null;
+  const displayName = `${patientName}${age !== null ? ` (${age})` : ''}${relationLine ? ` ${relationLine}` : ''}`;
+  const showActions =
+    canComplete || canCancel || (modules.telemedicine && appointment.mode === 'video' && appointment.status === 'scheduled');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
-      {/* Header */}
+      {/* Header — just the app chrome, nothing patient- or visit-specific */}
       <div className="bg-white shadow-md border-b-2 border-cyan-100">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Image src="/logo/logo-icon.png" alt="Logo" width={40} height={40} className="w-10 h-10 object-contain" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-600 to-brand-teal bg-clip-text text-transparent">
-              Appointment Details
-            </h1>
-          </div>
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-cyan-600 hover:text-cyan-700">
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+          <Image src="/logo/logo-icon.png" alt="Logo" width={36} height={36} className="w-9 h-9 object-contain" />
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-cyan-600 hover:text-cyan-700 text-sm">
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Appointment Status */}
-        <div
-          className={`mb-4 p-4 rounded-lg border-l-4 ${
-            appointment.status === 'completed'
-              ? 'bg-green-50 border-green-500'
-              : appointment.status === 'cancelled'
-              ? 'bg-red-50 border-red-500'
-              : 'bg-blue-50 border-blue-500'
-          }`}
-        >
-          <p className="text-sm font-semibold flex items-center gap-2 flex-wrap">
-            <span>
-              Status:{' '}
-              <span
-                className={
-                  appointment.status === 'completed'
-                    ? 'text-green-700'
-                    : appointment.status === 'cancelled'
-                    ? 'text-red-700'
-                    : 'text-blue-700'
-                }
-              >
-                {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-              </span>
-            </span>
-            {appointment.mode === 'video' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">
-                <Video className="w-3 h-3" /> Video consultation
-              </span>
-            )}
-            {appointment.followUpOf && (
-              <button
-                onClick={() => router.push(`/appointment/${appointment.followUpOf}`)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700 hover:bg-cyan-200 transition"
-                title="View the original appointment"
-              >
-                <CalendarPlus className="w-3 h-3" /> Follow-up · view original
-              </button>
-            )}
-          </p>
+      {/* Main Content — one continuous document, no cards */}
+      <div className="max-w-5xl mx-auto px-6 py-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 leading-tight">{displayName}</h1>
+            <p className="text-xs text-slate-500">
+              {new Date(appointment.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {appointment.time}
+            </p>
+          </div>
+          {showActions && (
+            <AppointmentDetailsCard
+              appointment={appointment}
+              appointmentId={appointmentId}
+              canComplete={canComplete}
+              canCancel={canCancel}
+              confirmAction={confirmAction}
+              setConfirmAction={setConfirmAction}
+              runConfirm={runConfirm}
+            />
+          )}
         </div>
 
-        <ActionsToolbar
-          appointment={appointment}
-          appointmentId={appointmentId}
-          isPatient={isPatient}
-          isAdmin={isAdmin}
-          canManage={canManage}
-          canOrderInjection={canOrderInjection}
-          canClinicalNotes={canManageClinicalNotes}
-          canReschedule={canReschedule}
-          canComplete={canComplete}
-          canCancel={canCancel}
-          onEdit={() => setModal('edit')}
-          onReschedule={() => setModal('reschedule')}
-          onVitals={() => setModal('vitals')}
-          onPrescription={() => setModal('rx')}
-          onClinicalNotes={() => setModal('notes')}
-          onOrderInjection={() => setModal('injection')}
-          onOrderTest={() => setModal('laborder')}
-          onFollowUp={() => setModal('followup')}
-          onConfirm={setConfirmAction}
-        />
+        <div className="divide-y divide-slate-200">
+          <div className="py-6">
+            <ClinicalNotesSection
+              appointmentId={appointmentId}
+              patientId={appointment.patientId}
+              doctorId={appointment.doctorId}
+              record={details.medicalRecords[0] ?? null}
+              canManage={canManageClinicalNotes}
+              isNewVisit={appointment.visitType === 'new'}
+            />
+          </div>
 
-        <AppointmentInfo
-          appointment={appointment}
-          doctor={details.doctor}
-          patient={details.patient}
-          doctorName={doctorName}
-          patientName={patientName}
-        />
+          <div className="py-6">
+            <VitalsSection
+              vitals={details.vitals}
+              appointmentId={appointmentId}
+              patientId={appointment.patientId}
+              doctorId={appointment.doctorId}
+              canManage={canManage}
+              canDelete={canDeleteVitals}
+            />
+          </div>
 
-        <ClinicalSections
-          prescriptions={details.prescriptions}
-          vitals={details.vitals}
-          medicalRecords={details.medicalRecords}
-          testOrders={details.testOrders}
-          canManage={canManage}
-          canDeletePrescription={canDeletePrescription}
-          canDeleteVitals={canDeleteVitals}
-          canDeleteTestOrder={canDeleteTestOrder}
-          onEditPrescription={(rx) => { setEditRx(rx); setModal('edit-rx'); }}
-          onDeletePrescription={handleDeletePrescription}
-          onEditVitals={(v) => { setEditVitals(v); setModal('edit-vitals'); }}
-          onDeleteVitals={handleDeleteVitals}
-          canEditRecord={canManageClinicalNotes}
-          onEditRecord={(rec) => { setEditRecord(rec); setModal('notes'); }}
-          onDeleteTestOrder={handleCancelTestOrder}
-        />
+          {canOrderInjection && (
+            <div className="py-6">
+              <InjectionOrdersSection
+                orders={details.injectionOrders}
+                appointmentId={appointmentId}
+                patientId={appointment.patientId}
+                doctorId={appointment.doctorId}
+                canManage={canOrderInjection}
+              />
+            </div>
+          )}
+
+          <div className="py-6">
+            <PrescriptionsSection
+              prescriptions={details.prescriptions}
+              appointmentId={appointmentId}
+              patientId={appointment.patientId}
+              doctorId={appointment.doctorId}
+              medicineOptions={medicineOptions}
+              canManage={canManage}
+              canDelete={canDeletePrescription}
+            />
+          </div>
+
+          <div className="py-6">
+            <LabOrdersSection
+              testOrders={details.testOrders}
+              appointmentId={appointmentId}
+              patientId={appointment.patientId}
+              doctorId={appointment.doctorId}
+              canOrder={canManage && modules.lab}
+              canDelete={canDeleteTestOrder}
+            />
+          </div>
+        </div>
       </div>
-
-      {/* Modals */}
-      {modal === 'reschedule' && (
-        <RescheduleModal
-          appointment={appointment}
-          appointmentId={appointmentId}
-          onClose={closeModal}
-          onSaved={() => {
-            refreshAppointment();
-            closeModal();
-          }}
-        />
-      )}
-
-      {modal === 'edit' && (
-        <EditAppointmentModal
-          appointment={appointment}
-          appointmentId={appointmentId}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'vitals' && (
-        <RecordVitalsModal
-          appointmentId={appointmentId}
-          patientId={appointment.patientId}
-          doctorId={appointment.doctorId}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'notes' && (
-        <AddClinicalNotesModal
-          appointmentId={appointmentId}
-          patientId={appointment.patientId}
-          doctorId={appointment.doctorId}
-          existing={editRecord ?? details.medicalRecords[0] ?? null}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'rx' && (
-        <AddPrescriptionModal
-          appointmentId={appointmentId}
-          patientId={appointment.patientId}
-          doctorId={appointment.doctorId}
-          medicineOptions={medicineOptions}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'injection' && (
-        <AddInjectionOrderModal
-          appointmentId={appointmentId}
-          patientId={appointment.patientId}
-          doctorId={appointment.doctorId}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'edit-rx' && editRx && (
-        <EditPrescriptionModal
-          prescription={editRx}
-          medicineOptions={medicineOptions}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'edit-vitals' && editVitals && (
-        <EditVitalsModal
-          vitals={editVitals}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {modal === 'laborder' && (
-        <OrderTestModal
-          appointmentId={appointmentId}
-          patientId={appointment.patientId}
-          doctorId={appointment.doctorId}
-          onClose={closeModal}
-          onSaved={afterSave}
-        />
-      )}
-
-      {confirmAction && (
-        <ConfirmActionModal action={confirmAction} onCancel={() => setConfirmAction(null)} onConfirm={runConfirm} />
-      )}
-
-      {deleteTarget && (
-        <ConfirmDeleteModal
-          title={deleteTarget.title}
-          body={deleteTarget.body}
-          confirmLabel={deleteTarget.confirmLabel}
-          loading={deleteLoading}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={runDelete}
-        />
-      )}
-
-      {modal === 'followup' && (
-        <FollowUpModal
-          appointment={appointment}
-          onClose={closeModal}
-          onCreated={(msg) => {
-            closeModal();
-            toast.success(msg);
-          }}
-        />
-      )}
-
     </div>
   );
 }

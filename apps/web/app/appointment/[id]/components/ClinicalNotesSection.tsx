@@ -1,0 +1,206 @@
+'use client';
+
+import { useState } from 'react';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
+import { FileText } from 'lucide-react';
+import { apiError } from '@/lib/apiError';
+import { Spinner } from '@/components/ui/spinner';
+import { FormField } from '@/components/form/FormField';
+import { useCreateMedicalRecordMutation, useUpdateMedicalRecordMutation } from '@/store/api';
+import type { MedicalRecord } from '@/lib/types';
+
+const schema = Yup.object({
+  diagnosis: Yup.string().trim(),
+  treatmentAdvice: Yup.string().trim(),
+  followUpAdvice: Yup.string().trim(),
+  chiefComplaint: Yup.string().trim(),
+  medicalHistory: Yup.string().trim(),
+  surgicalHistory: Yup.string().trim(),
+  familyHistory: Yup.string().trim(),
+  lmp: Yup.string(),
+  menstrualHistory: Yup.string().trim(),
+  maritalStatus: Yup.string().trim(),
+  obstetricHistory: Yup.string().trim(),
+}).test('at-least-one', 'Fill in at least one of these', (values) =>
+  Object.values(values).some((v) => (v ?? '').trim()),
+);
+
+interface Props {
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  record: MedicalRecord | null;
+  canManage: boolean;
+  /** The first encounter collects history a follow-up doesn't re-ask. */
+  isNewVisit: boolean;
+}
+
+// No view/edit toggle: whoever can write notes sees the form, pre-filled with
+// whatever is already on file, ready to add to or correct in place.
+export function ClinicalNotesSection({ appointmentId, patientId, doctorId, record, canManage, isNewVisit }: Props) {
+  const [createMedicalRecord] = useCreateMedicalRecordMutation();
+  const [updateMedicalRecord] = useUpdateMedicalRecordMutation();
+  const [error, setError] = useState('');
+
+  if (!canManage && !record) return null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <FileText className="w-5 h-5 text-slate-500" />
+        <h2 className="text-base font-semibold text-slate-900">Clinical Notes</h2>
+      </div>
+
+      {canManage ? (
+        <Formik
+          enableReinitialize
+          initialValues={{
+            diagnosis: record?.diagnosis ?? '',
+            treatmentAdvice: record?.treatmentAdvice ?? '',
+            followUpAdvice: record?.followUpAdvice ?? '',
+            chiefComplaint: record?.chiefComplaint ?? '',
+            medicalHistory: record?.medicalHistory ?? '',
+            surgicalHistory: record?.surgicalHistory ?? '',
+            familyHistory: record?.familyHistory ?? '',
+            lmp: record?.lmp ?? '',
+            menstrualHistory: record?.menstrualHistory ?? '',
+            maritalStatus: record?.maritalStatus ?? '',
+            obstetricHistory: record?.obstetricHistory ?? '',
+          }}
+          validationSchema={schema}
+          onSubmit={async (values, { setSubmitting }) => {
+            setError('');
+            const body = {
+              diagnosis: values.diagnosis.trim(),
+              treatmentAdvice: values.treatmentAdvice.trim(),
+              followUpAdvice: values.followUpAdvice.trim(),
+              chiefComplaint: values.chiefComplaint.trim(),
+              medicalHistory: values.medicalHistory.trim(),
+              surgicalHistory: values.surgicalHistory.trim(),
+              familyHistory: values.familyHistory.trim(),
+              lmp: values.lmp,
+              menstrualHistory: values.menstrualHistory.trim(),
+              maritalStatus: values.maritalStatus.trim(),
+              obstetricHistory: values.obstetricHistory.trim(),
+            };
+            try {
+              if (record) {
+                await updateMedicalRecord({ id: record.id, ...body }).unwrap();
+              } else {
+                await createMedicalRecord({ appointmentId, patientId, doctorId, ...body }).unwrap();
+              }
+            } catch (err) {
+              setError(apiError(err, 'Could not save clinical notes'));
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+        >
+          {({ isSubmitting }) => (
+            <Form className="space-y-4">
+              {isNewVisit && (
+                <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
+                  <div className="space-y-4">
+                    <FormField name="lmp" label="LMP" type="date" />
+                    <FormField name="menstrualHistory" label="Menstrual History" as="textarea" rows={2} dictation />
+                    <FormField name="maritalStatus" label="Marital Status" placeholder="e.g. Married" />
+                    <FormField name="obstetricHistory" label="Obstetric History" as="textarea" rows={2} placeholder="e.g. G2P1L1, previous LSCS" dictation />
+                  </div>
+                  <div className="space-y-4">
+                    <FormField name="chiefComplaint" label="Chief Complaint" as="textarea" rows={2} placeholder="What brought the patient in" dictation />
+                    <FormField name="medicalHistory" label="Medical History" as="textarea" rows={2} dictation />
+                    <FormField name="surgicalHistory" label="Surgical History" as="textarea" rows={2} dictation />
+                    <FormField name="familyHistory" label="Family History" as="textarea" rows={2} dictation />
+                  </div>
+                </div>
+              )}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <FormField name="diagnosis" label="Diagnosis" as="textarea" rows={4} placeholder="e.g. Acute pharyngitis, viral etiology" dictation />
+                <FormField name="treatmentAdvice" label="Treatment Advice" as="textarea" rows={4} placeholder="e.g. Warm saline gargles, paracetamol for fever, rest and fluids" dictation />
+              </div>
+              <FormField name="followUpAdvice" label="Follow-up Advice" as="textarea" rows={2} placeholder="e.g. Review in 5 days, or sooner if fever crosses 102°F" dictation />
+              {record?.labReports && record.labReports.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-0.5">Lab Reports</p>
+                  <p className="text-sm text-slate-500">{record.labReports.join(', ')}</p>
+                </div>
+              )}
+              {error && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+              )}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
+              >
+                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : record ? 'Update Notes' : 'Save Notes'}
+              </button>
+            </Form>
+          )}
+        </Formik>
+      ) : record ? (
+        <div className="space-y-3">
+          {isNewVisit && (
+            <div className="grid sm:grid-cols-2 gap-4 pb-3 border-b border-slate-100">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-slate-600">LMP</p>
+                  <p className="text-slate-900">{record.lmp || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Menstrual History</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.menstrualHistory || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Marital Status</p>
+                  <p className="text-slate-900">{record.maritalStatus || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Obstetric History</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.obstetricHistory || '—'}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-slate-600">Chief Complaint</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.chiefComplaint || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Medical History</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.medicalHistory || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Surgical History</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.surgicalHistory || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Family History</p>
+                  <p className="text-slate-900 whitespace-pre-line">{record.familyHistory || '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="text-sm text-slate-600">Diagnosis</p>
+            <p className="text-slate-900 whitespace-pre-line">{record.diagnosis || '—'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-600">Treatment Advice</p>
+            <p className="text-slate-900 whitespace-pre-line">{record.treatmentAdvice || '—'}</p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-600">Follow-up Advice</p>
+            <p className="text-slate-900 whitespace-pre-line">{record.followUpAdvice || '—'}</p>
+          </div>
+          {record.labReports && record.labReports.length > 0 && (
+            <div>
+              <p className="text-sm text-slate-600">Lab Reports</p>
+              <p className="text-slate-500">{record.labReports.join(', ')}</p>
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}

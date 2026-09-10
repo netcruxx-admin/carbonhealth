@@ -117,8 +117,10 @@ function bmiFrom(heightCm: string, weightKg: string): string {
 }
 
 /** Watches the source fields and refreshes the derived ones on change only —
- *  the initial values (a saved record's own BMI/EDD/POG) are left as they are. */
-function Autofill() {
+ *  the initial values (a saved record's own BMI/EDD/POG) are left as they are.
+ *  Exported so a compact table-row layout can reuse the derivation without a
+ *  labeled `VitalsFormFields` block. */
+export function Autofill() {
   const { values, setFieldValue } = useFormikContext<VitalsFormValues>();
   const seen = useRef({
     hw: `${values.height}|${values.weight}`,

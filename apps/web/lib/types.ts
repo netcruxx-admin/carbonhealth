@@ -150,6 +150,15 @@ export interface MedicalRecord {
   treatmentAdvice: string;
   followUpAdvice: string;
   labReports: string[];
+  /** New-visit history-taking — blank on a follow-up note. */
+  chiefComplaint: string;
+  medicalHistory: string;
+  surgicalHistory: string;
+  familyHistory: string;
+  lmp: string;
+  menstrualHistory: string;
+  maritalStatus: string;
+  obstetricHistory: string;
   createdAt: string;
 }
 

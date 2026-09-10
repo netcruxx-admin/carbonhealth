@@ -15,8 +15,8 @@ import { apiError } from '@/lib/apiError';
 import {
   useDeleteAppointmentMutation,
   useGetAppointmentQuery,
-  useGetDoctorQuery,
   useGetPatientQuery,
+  useListInjectionOrdersQuery,
   useListMedicalRecordsQuery,
   useListMedicinesQuery,
   useListPrescriptionsQuery,
@@ -45,12 +45,12 @@ export function useAppointmentDetail() {
 
   // Everything else hangs off the appointment, so it waits for it.
   const ready = Boolean(appointment);
-  const { data: doctor } = useGetDoctorQuery(appointment?.doctorId ?? '', { skip: !ready });
   const { data: patient } = useGetPatientQuery(appointment?.patientId ?? '', { skip: !ready });
   const { data: prescriptions = [] } = useListPrescriptionsQuery({ appointmentId }, { skip: !ready });
   const { data: medicalRecords = [] } = useListMedicalRecordsQuery({ appointmentId }, { skip: !ready });
   const { data: vitals = [] } = useListVitalsQuery({ appointmentId }, { skip: !ready });
   const { data: orders = [] } = useListTestOrdersQuery({ appointmentId }, { skip: !ready });
+  const { data: injectionOrders = [] } = useListInjectionOrdersQuery({ appointmentId }, { skip: !ready });
   // Only the results belonging to this appointment's orders — the endpoint
   // takes a comma-separated list, so it stays one request.
   const orderIds = orders.map((o) => o.id).join(',');
@@ -71,12 +71,12 @@ export function useAppointmentDetail() {
 
   const details = {
     appointment: appointment ?? null,
-    doctor: doctor ?? null,
     patient: patient ?? null,
     prescriptions,
     medicalRecords,
     vitals,
     testOrders,
+    injectionOrders,
   };
 
   const runConfirm = async () => {
@@ -106,8 +106,7 @@ export function useAppointmentDetail() {
     setConfirmAction(null);
   };
 
-  // Names come from the records themselves — DoctorOut/PatientOut embed the user.
-  const doctorName = doctor?.user?.name ? `Dr. ${doctor.user.name}` : 'Doctor';
+  // The name comes from the record itself — PatientOut embeds the user.
   const patientName = patient?.user?.name ?? 'Patient';
 
   const role = session?.user.role;
@@ -159,7 +158,6 @@ export function useAppointmentDetail() {
     // Mutations invalidate their cache tags, so the page refreshes itself.
     refreshAppointment: () => {},
     reloadDetails: () => {},
-    doctorName,
     patientName,
     role,
     isPatient,

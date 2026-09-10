@@ -650,6 +650,17 @@ class MedicalRecord(Base):
     treatment_advice = Column(Text, default="")
     follow_up_advice = Column(Text, default="")
     lab_reports = Column(JSON, default=list)
+    # New-visit history-taking, collected once at the first encounter rather
+    # than re-asked every follow-up. All optional and blank for a follow-up
+    # note, which only ever fills diagnosis/treatment_advice/follow_up_advice.
+    chief_complaint = Column(Text, default="")
+    medical_history = Column(Text, default="")
+    surgical_history = Column(Text, default="")
+    family_history = Column(Text, default="")
+    lmp = Column(String, default="")
+    menstrual_history = Column(Text, default="")
+    marital_status = Column(String, default="")
+    obstetric_history = Column(Text, default="")
     created_at = Column(String, nullable=False)
 
 

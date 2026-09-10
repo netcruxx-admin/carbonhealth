@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 
@@ -52,21 +52,24 @@ export function DictationButton({ onTranscript, label = 'Dictate', lang, classNa
             {interim}
           </span>
         )}
+        {listening && (
+          <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-75" aria-hidden />
+        )}
         <button
           type="button"
           onClick={toggle}
           aria-pressed={listening}
           aria-label={listening ? 'Stop dictation' : label}
           title={listening ? 'Stop dictation' : label}
-          className={`inline-flex h-7 w-7 items-center justify-center rounded-md border transition ${
+          className={`relative inline-flex h-7 w-7 items-center justify-center border transition-all ${
             listening
-              ? 'border-red-300 bg-red-50 text-red-600 animate-pulse'
+              ? 'rounded-full border-red-500 bg-red-500 text-white shadow-sm scale-105'
               : errored
-                ? 'border-red-200 text-red-400 hover:bg-red-50'
-                : 'border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                ? 'rounded-md border-red-200 text-red-400 hover:bg-red-50'
+                : 'rounded-md border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-slate-700'
           }`}
         >
-          {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          <Mic className="h-4 w-4" />
         </button>
       </span>
     </span>

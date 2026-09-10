@@ -1379,6 +1379,15 @@ class MedicalRecordCreate(CamelModel):
     treatment_advice: str = ""
     follow_up_advice: str = ""
     lab_reports: List[str] = []
+    # New-visit history-taking. See MedicalRecord.chief_complaint in models.py.
+    chief_complaint: str = ""
+    medical_history: str = ""
+    surgical_history: str = ""
+    family_history: str = ""
+    lmp: str = ""
+    menstrual_history: str = ""
+    marital_status: str = ""
+    obstetric_history: str = ""
 
 
 class MedicalRecordUpdate(CamelModel):
@@ -1389,6 +1398,14 @@ class MedicalRecordUpdate(CamelModel):
     treatment_advice: Optional[str] = None
     follow_up_advice: Optional[str] = None
     lab_reports: Optional[List[str]] = None
+    chief_complaint: Optional[str] = None
+    medical_history: Optional[str] = None
+    surgical_history: Optional[str] = None
+    family_history: Optional[str] = None
+    lmp: Optional[str] = None
+    menstrual_history: Optional[str] = None
+    marital_status: Optional[str] = None
+    obstetric_history: Optional[str] = None
 
 
 class MedicalRecordOut(OutModel):
@@ -1400,6 +1417,14 @@ class MedicalRecordOut(OutModel):
     treatment_advice: str = ""
     follow_up_advice: str = ""
     lab_reports: List[str] = []
+    chief_complaint: str = ""
+    medical_history: str = ""
+    surgical_history: str = ""
+    family_history: str = ""
+    lmp: str = ""
+    menstrual_history: str = ""
+    marital_status: str = ""
+    obstetric_history: str = ""
     created_at: str
 
 

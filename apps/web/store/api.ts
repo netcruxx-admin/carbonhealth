@@ -599,6 +599,14 @@ export interface MedicalRecordCreateBody {
   treatmentAdvice?: string;
   followUpAdvice?: string;
   labReports?: string[];
+  chiefComplaint?: string;
+  medicalHistory?: string;
+  surgicalHistory?: string;
+  familyHistory?: string;
+  lmp?: string;
+  menstrualHistory?: string;
+  maritalStatus?: string;
+  obstetricHistory?: string;
 }
 export interface MedicalRecordUpdateBody {
   id: string;
@@ -606,6 +614,14 @@ export interface MedicalRecordUpdateBody {
   treatmentAdvice?: string;
   followUpAdvice?: string;
   labReports?: string[];
+  chiefComplaint?: string;
+  medicalHistory?: string;
+  surgicalHistory?: string;
+  familyHistory?: string;
+  lmp?: string;
+  menstrualHistory?: string;
+  maritalStatus?: string;
+  obstetricHistory?: string;
 }
 export interface PrescriptionCreateBody {
   appointmentId: string;
