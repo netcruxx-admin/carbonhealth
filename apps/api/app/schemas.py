@@ -1376,7 +1376,8 @@ class MedicalRecordCreate(CamelModel):
     appointment_id: str
     doctor_id: str
     diagnosis: str = ""
-    prescription: str = ""
+    treatment_advice: str = ""
+    follow_up_advice: str = ""
     lab_reports: List[str] = []
 
 
@@ -1386,7 +1387,8 @@ class MedicalRecordOut(OutModel):
     appointment_id: str
     doctor_id: str
     diagnosis: str = ""
-    prescription: str = ""
+    treatment_advice: str = ""
+    follow_up_advice: str = ""
     lab_reports: List[str] = []
     created_at: str
 

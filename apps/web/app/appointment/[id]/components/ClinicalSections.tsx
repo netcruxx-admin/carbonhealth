@@ -222,11 +222,12 @@ export function ClinicalSections({
       {medicalRecords.length > 0 && (
         <div>
           <SectionHeader icon={FileText} title="Medical Records" count={medicalRecords.length} />
-          <Table head={['Diagnosis', 'Prescription', 'Lab Reports']}>
+          <Table head={['Diagnosis', 'Treatment Advice', 'Follow-up Advice', 'Lab Reports']}>
             {medicalRecords.map((record) => (
               <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50">
-                <td className="py-3 px-4 font-medium text-slate-900">{record.diagnosis}</td>
-                <td className="py-3 px-4 text-slate-600">{record.prescription || '—'}</td>
+                <td className="py-3 px-4 font-medium text-slate-900">{record.diagnosis || '—'}</td>
+                <td className="py-3 px-4 text-slate-600 whitespace-pre-line">{record.treatmentAdvice || '—'}</td>
+                <td className="py-3 px-4 text-slate-600 whitespace-pre-line">{record.followUpAdvice || '—'}</td>
                 <td className="py-3 px-4 text-slate-500">
                   {record.labReports?.length > 0 ? record.labReports.join(', ') : '—'}
                 </td>

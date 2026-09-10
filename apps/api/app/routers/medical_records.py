@@ -34,7 +34,15 @@ def list_medical_records(
     # else's id narrows the result to nothing rather than exposing their records.
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.MedicalRecord))
-    query = text_search(query, [models.MedicalRecord.diagnosis, models.MedicalRecord.prescription], params.q)
+    query = text_search(
+        query,
+        [
+            models.MedicalRecord.diagnosis,
+            models.MedicalRecord.treatment_advice,
+            models.MedicalRecord.follow_up_advice,
+        ],
+        params.q,
+    )
     query = query.order_by(models.MedicalRecord.created_at.desc(), models.MedicalRecord.id)
     return paginate(query, response, params.limit, params.offset).all()
 

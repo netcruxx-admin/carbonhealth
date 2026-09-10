@@ -146,7 +146,9 @@ export interface MedicalRecord {
   appointmentId: string;
   doctorId: string;
   diagnosis: string;
-  prescription: string;
+  /** Free-text clinical advice. `treatmentAdvice` was previously `prescription`. */
+  treatmentAdvice: string;
+  followUpAdvice: string;
   labReports: string[];
   createdAt: string;
 }

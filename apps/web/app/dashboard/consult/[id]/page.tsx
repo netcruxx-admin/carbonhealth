@@ -150,7 +150,6 @@ export default function ConsultRoomPage() {
         appointmentId,
         doctorId: appointment.doctorId,
         diagnosis: `[Teleconsult note] ${note.trim()}`,
-        prescription: '',
         labReports: [],
       }).unwrap();
       setNoteSaved(true);

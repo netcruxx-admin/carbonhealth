@@ -596,7 +596,8 @@ export interface MedicalRecordCreateBody {
   appointmentId: string;
   doctorId: string;
   diagnosis?: string;
-  prescription?: string;
+  treatmentAdvice?: string;
+  followUpAdvice?: string;
   labReports?: string[];
 }
 export interface PrescriptionCreateBody {

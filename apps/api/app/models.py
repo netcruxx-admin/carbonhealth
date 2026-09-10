@@ -644,7 +644,11 @@ class MedicalRecord(Base):
     appointment_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     diagnosis = Column(Text, default="")
-    prescription = Column(Text, default="")
+    # Free-text clinical advice. `treatment_advice` was previously named
+    # `prescription` — a misnomer, since actual drug orders live in the
+    # Prescription table — and is renamed here without losing its data.
+    treatment_advice = Column(Text, default="")
+    follow_up_advice = Column(Text, default="")
     lab_reports = Column(JSON, default=list)
     created_at = Column(String, nullable=False)
 
