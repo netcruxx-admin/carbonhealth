@@ -15,7 +15,15 @@ from ..authz import (
 )
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, get_tenant_id, scoped
-from ..utils import ListQuery, attach_users, list_params, paginate, text_search
+from ..utils import (
+    DEFAULT_APPOINTMENT_SORT,
+    ListQuery,
+    apply_appointment_sort,
+    attach_users,
+    list_params,
+    paginate,
+    text_search,
+)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -132,7 +140,7 @@ def doctor_appointments(
     )
     if scope == SCOPE_OWN:
         query = query.filter(own_record_filter(db, user, models.Appointment))
-    query = query.order_by(models.Appointment.date.desc(), models.Appointment.id)
+    query = apply_appointment_sort(query, DEFAULT_APPOINTMENT_SORT)
     return paginate(query, response, params.limit, params.offset).all()
 
 

@@ -15,7 +15,7 @@ import { hasPermission } from '@/lib/auth';
 import type { RoleViewProps } from '@/components/RoleView';
 import type { Patient } from '@/lib/types';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, fmtAge, ageFromDob } from '@/lib/date';
 import {
   useListPatientsPagedQuery,
   useLazyListPatientsPagedQuery,
@@ -39,6 +39,8 @@ interface PatientRow {
   phone: string;
   gender: string;
   bloodGroup: string;
+  /** ISO date of birth, or "" — the Age column is derived from this. */
+  dateOfBirth: string;
   /** Completed visits. */
   visits: number;
   /** Appointments of any status. */
@@ -68,6 +70,7 @@ const genderColumn: Column = {
   header: 'Gender',
   render: (row) => row.gender ? row.gender.charAt(0).toUpperCase() + row.gender.slice(1) : '—',
 };
+const ageColumn: Column = { header: 'Age', render: (row) => fmtAge(row.dateOfBirth) };
 const bloodGroupColumn: Column = { header: 'Blood Group', render: (row) => row.bloodGroup };
 const nextVisitColumn: Column = {
   header: 'Next Visit',
@@ -114,6 +117,7 @@ const viewByRole: Record<
       { header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
       { header: 'Email', render: (row) => <span className="text-sm">{row.email}</span> },
       genderColumn,
+      ageColumn,
       bloodGroupColumn,
       { header: 'Phone', render: (row) => row.phone },
       {
@@ -121,8 +125,8 @@ const viewByRole: Record<
         render: (row) => <span className="font-semibold text-slate-900">{row.appointments}</span>,
       },
     ],
-    exportHeaders: ['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Visits'],
-    exportRow: (row) => [row.name, row.email, row.gender, row.bloodGroup, row.phone, row.appointments],
+    exportHeaders: ['Name', 'Email', 'Gender', 'Age', 'Blood Group', 'Phone', 'Visits'],
+    exportRow: (row) => [row.name, row.email, row.gender, ageFromDob(row.dateOfBirth) ?? '', row.bloodGroup, row.phone, row.appointments],
     sort: (a, b) => b.appointments - a.appointments,
   },
   [doctorRole]: {
@@ -132,6 +136,7 @@ const viewByRole: Record<
     columns: [
       nameWithPhoneColumn,
       genderColumn,
+      ageColumn,
       { header: 'Visits', render: (row) => row.visits },
       { header: 'Last Visit', render: (row) => fmtDate(row.lastVisit) },
       nextVisitColumn,
@@ -144,9 +149,9 @@ const viewByRole: Record<
     title: 'Patients',
     subtitle: 'All registered patients',
     searchPlaceholder: 'Search patient or phone…',
-    columns: [nameWithPhoneColumn, genderColumn, bloodGroupColumn, nextVisitColumn, detailsColumn],
-    exportHeaders: ['Name', 'Phone', 'Gender', 'Blood Group', 'Next Visit'],
-    exportRow: (row) => [row.name, row.phone, row.gender, row.bloodGroup, row.nextVisit ?? ''],
+    columns: [nameWithPhoneColumn, genderColumn, ageColumn, bloodGroupColumn, nextVisitColumn, detailsColumn],
+    exportHeaders: ['Name', 'Phone', 'Gender', 'Age', 'Blood Group', 'Next Visit'],
+    exportRow: (row) => [row.name, row.phone, row.gender, ageFromDob(row.dateOfBirth) ?? '', row.bloodGroup, row.nextVisit ?? ''],
     sort: (a, b) => a.name.localeCompare(b.name),
   },
 };
@@ -159,6 +164,7 @@ function toRow(patient: Patient): PatientRow {
     phone: patient.phone || patient.user?.phone || '—',
     gender: patient.gender || '',
     bloodGroup: patient.bloodGroup || '—',
+    dateOfBirth: patient.dateOfBirth || '',
     // Aggregated by the API for this page (withStats).
     visits: patient.visitCount ?? 0,
     appointments: patient.visitCount ?? 0,

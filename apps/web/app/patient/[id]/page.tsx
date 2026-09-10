@@ -40,6 +40,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 import { formatPatientAddress } from '@/components/patients/patientProfile';
 import { maskAadhaar } from '@/lib/aadhaar';
+import { fmtAge } from '@/lib/date';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -200,7 +201,7 @@ export default function PatientDetailPage() {
               <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /> {patientUser?.email ?? '—'}</span>
               <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.phone || '—'}</span>
               <span className="flex items-center gap-1"><Droplet className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.bloodGroup || '—'}</span>
-              <span className="capitalize">{patientRecord.gender || '—'}{patientRecord.dateOfBirth ? ` · DOB ${patientRecord.dateOfBirth}` : ''}</span>
+              <span className="capitalize">{patientRecord.gender || '—'}{patientRecord.dateOfBirth ? ` · DOB ${patientRecord.dateOfBirth} · ${fmtAge(patientRecord.dateOfBirth)}` : ''}</span>
             </div>
           </div>
         </div>
@@ -230,7 +231,7 @@ export default function PatientDetailPage() {
             <Info label="Allergies" value={patientRecord.allergies} icon={ShieldAlert} highlight={!!patientRecord.allergies && patientRecord.allergies.toLowerCase() !== 'none' && !patientRecord.allergies.toLowerCase().includes('no known')} />
             <Info label="Chronic Diseases" value={patientRecord.chronicDiseases} />
             <Info label="Medical History" value={patientRecord.medicalHistory} />
-            <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
+            <Info label="Emergency Contact" value={patientRecord.emergencyContact ? `${patientRecord.emergencyContact}${patientRecord.emergencyRelationship ? ` (${patientRecord.emergencyRelationship})` : ''}${patientRecord.emergencyPhone ? ` · ${patientRecord.emergencyPhone}` : ''}` : ''} />
             <Info label="Insurance Provider" value={patientRecord.insuranceProvider} />
             <Info label="Insurance Number" value={patientRecord.insuranceNumber} />
           </div>

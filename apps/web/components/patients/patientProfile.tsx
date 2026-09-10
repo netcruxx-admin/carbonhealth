@@ -52,6 +52,7 @@ export interface PatientProfileValues {
   chronicDiseases: string;
   emergencyContact: string;
   emergencyPhone: string;
+  emergencyRelationship: string;
   insuranceProvider: string;
   insuranceNumber: string;
 }
@@ -72,6 +73,7 @@ export const emptyPatientProfile: PatientProfileValues = {
   chronicDiseases: '',
   emergencyContact: '',
   emergencyPhone: '',
+  emergencyRelationship: '',
   insuranceProvider: '',
   insuranceNumber: '',
 };
@@ -94,6 +96,7 @@ export function patientProfileValues(patient: Patient): PatientProfileValues {
     chronicDiseases: patient.chronicDiseases ?? '',
     emergencyContact: patient.emergencyContact ?? '',
     emergencyPhone: toPhoneDigits(patient.emergencyPhone ?? ''),
+    emergencyRelationship: patient.emergencyRelationship ?? '',
     insuranceProvider: patient.insuranceProvider ?? '',
     insuranceNumber: patient.insuranceNumber ?? '',
   };
@@ -126,6 +129,7 @@ export const patientProfileSchemaFields = {
   chronicDiseases: Yup.string().max(300, 'Too long'),
   emergencyContact: Yup.string().max(100, 'Too long'),
   emergencyPhone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
+  emergencyRelationship: Yup.string().max(50, 'Too long'),
   insuranceProvider: Yup.string().max(100, 'Too long'),
   insuranceNumber: Yup.string().max(60, 'Too long'),
 };
@@ -155,6 +159,7 @@ export function patientProfilePayload(values: PatientProfileValues) {
     chronicDiseases: values.chronicDiseases.trim(),
     emergencyContact: values.emergencyContact.trim(),
     emergencyPhone: withPrefix(values.emergencyPhone),
+    emergencyRelationship: values.emergencyRelationship.trim(),
     insuranceProvider: values.insuranceProvider.trim(),
     insuranceNumber: values.insuranceNumber.trim(),
   };
@@ -260,6 +265,11 @@ export function PatientCareFields() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField name="emergencyContact" label="Contact Name" placeholder="Full name" />
           <PhoneField name="emergencyPhone" label="Contact Phone" />
+          <FormField
+            name="emergencyRelationship"
+            label="Relationship"
+            placeholder="e.g. Spouse, Parent, Sibling"
+          />
         </div>
       </Section>
       <Section title="Insurance">

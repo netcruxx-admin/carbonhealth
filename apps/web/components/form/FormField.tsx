@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useField } from 'formik';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { DictationButton } from './DictationButton';
 
 interface Option {
   value: string;
@@ -31,6 +32,12 @@ interface FormFieldProps {
    * outside the form — a query hook, say — has to react to a field's value.
    */
   onValueChange?: (value: string) => void;
+  /**
+   * Show a mic button that appends dictated speech to the field. Only for
+   * free-text `input`/`textarea` fields; silently absent where the browser has
+   * no speech recognition.
+   */
+  dictation?: boolean;
 }
 
 export function FormField({
@@ -48,19 +55,28 @@ export function FormField({
   icon: Icon,
   autoComplete,
   onValueChange,
+  dictation = false,
 }: FormFieldProps) {
-  const [field, meta] = useField(name);
+  const [field, meta, helpers] = useField(name);
   const onChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     field.onChange(e);
     onValueChange?.(e.target.value);
   };
+  const canDictate = dictation && as !== 'select' && type !== 'password';
+  const appendDictation = (text: string) => {
+    const current: string = field.value ?? '';
+    const next = !current || /\s$/.test(current) ? `${current}${text}` : `${current} ${text}`;
+    helpers.setValue(next);
+    helpers.setTouched(true);
+    onValueChange?.(next);
+  };
   const [show, setShow] = useState(false);
   const hasError = meta.touched && !!meta.error;
   const isPassword = type === 'password';
   const left = Icon ? 'pl-10' : 'pl-3';
-  const right = isPassword ? 'pr-10' : 'pr-3';
+  const right = isPassword || canDictate ? 'pr-10' : 'pr-3';
   const base = `w-full ${left} ${right} py-2 border rounded-lg text-sm focus:outline-none transition ${
     hasError ? 'border-red-400 focus:border-red-500' : 'border-slate-300 focus:border-cyan-500'
   }`;
@@ -104,7 +120,7 @@ export function FormField({
     );
   }
 
-  const needsWrapper = !!Icon || isPassword;
+  const needsWrapper = !!Icon || isPassword || canDictate;
 
   return (
     <div>
@@ -116,6 +132,13 @@ export function FormField({
         <div className="relative">
           {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />}
           {control}
+          {canDictate && (
+            <DictationButton
+              onTranscript={appendDictation}
+              label={`Dictate ${label.toLowerCase()}`}
+              className={as === 'textarea' ? 'absolute right-2 top-2' : 'absolute right-2 top-1/2 -translate-y-1/2'}
+            />
+          )}
           {isPassword && (
             <button
               type="button"

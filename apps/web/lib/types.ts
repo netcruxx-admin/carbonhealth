@@ -39,6 +39,8 @@ export interface Patient {
   chronicDiseases: string;
   emergencyContact: string;
   emergencyPhone: string;
+  /** How the emergency contact is related to the patient, e.g. "Spouse". */
+  emergencyRelationship: string;
   medicalHistory: string;
   insuranceProvider: string;
   insuranceNumber: string;
@@ -633,6 +635,7 @@ export interface PatientDetails {
   chronicDiseases?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  emergencyRelationship?: string;
   insuranceProvider?: string;
   insuranceNumber?: string;
   aadhaarNumber?: string;

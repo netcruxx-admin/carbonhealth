@@ -502,6 +502,8 @@ class Patient(Base):
     chronic_diseases = Column(Text, default="")
     emergency_contact = Column(String, default="")
     emergency_phone = Column(String, default="")
+    # How the emergency contact is related to the patient, e.g. "Spouse".
+    emergency_relationship = Column(String, default="")
     medical_history = Column(Text, default="")
     insurance_provider = Column(String, default="")
     insurance_number = Column(String, default="")
@@ -771,6 +773,93 @@ class InventoryMovement(Base):
     lot_number = Column(String, default="")
     expiry_date = Column(String, default="")
     reference_id = Column(String, default="")
+    performed_by = Column(String, nullable=False)
+    notes = Column(Text, default="")
+    created_at = Column(String, nullable=False)
+
+
+class Injectable(Base):
+    """Catalogue of injectable products a hospital keeps in stock — vaccines,
+    injectable antibiotics, analgesics. The injection-order counterpart of
+    Medicine, kept separate because a shot is stocked, dosed and consumed
+    differently (per-vial, cold chain, single administration) and its queue has
+    two actors, not three: the doctor orders it and the nurse gives it."""
+
+    __tablename__ = "injectables"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    category = Column(String, default="")   # vaccine | antibiotic | analgesic | ...
+    form = Column(String, default="")       # vial | ampoule | prefilled syringe
+    strength = Column(String, default="")   # "1 g", "40 mg/mL"
+    # Default route for this product; an order may override it.
+    route = Column(String, default="IM")    # IM | IV | SC | ID
+    price = Column(Float, default=0)
+    # Units (vials/ampoules) on hand — what an order consumes and what a
+    # movement row moves by.
+    stock = Column(Integer, default=0)
+    reorder_level = Column(Integer, default=10)
+    lot_number = Column(String, default="")
+    expiry_date = Column(String, default="")  # ISO date
+    location = Column(String, default="")     # fridge / shelf
+    unit = Column(String, default="")         # "vial", "ampoule"
+
+
+class InjectionOrder(Base):
+    """A shot a doctor has ordered for a patient and a nurse has to give.
+
+    Mirrors MedicationOrder without the pharmacist dispense step: stock is the
+    nurse's to move, because administration *is* the point of consumption for a
+    single-dose injectable. Status is ordered → administered → (or cancelled)."""
+
+    __tablename__ = "injection_orders"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    # Nullable: a shot may be ordered on a ward round with no appointment.
+    appointment_id = Column(String, index=True, nullable=True)
+    patient_id = Column(String, index=True, nullable=False)
+    doctor_id = Column(String, nullable=False)  # the prescriber
+    # The prescription this shot was ordered alongside, when it came from one.
+    prescription_id = Column(String, index=True, nullable=True)
+    # Catalogue link. Nullable: a doctor may name something not stocked, in
+    # which case administration moves no stock.
+    injectable_id = Column(String, nullable=True)
+    injectable_name = Column(String, default="")
+    dose = Column(String, default="")       # "1 g", "0.5 mL" — free text for the label
+    route = Column(String, default="IM")
+    # Vials/ampoules to consume at administration. Its own column rather than
+    # something parsed out of the dose text, for the same reason MedicationOrder
+    # keeps quantity separate.
+    quantity = Column(Integer, nullable=False, server_default="1", default=1)
+    scheduled_for = Column(String, default="")  # ISO date the shot is due, optional
+    instructions = Column(Text, default="")
+    status = Column(String, default="ordered")  # ordered | administered | cancelled
+    # Filled by the nurse at administration.
+    site = Column(String, default="")       # "Left deltoid", "IV line A"
+    notes = Column(Text, default="")
+    # Facts about what happened — written by the server on the status change,
+    # never taken from the request body.
+    administered_by = Column(String, nullable=True)  # user id of the nurse
+    administered_at = Column(String, nullable=True)   # ISO datetime
+    ordered_at = Column(String, nullable=False)
+
+
+class InjectionStockMovement(Base):
+    """Append-only ledger for injectable stock: restock, administer, adjust,
+    expire. The injection counterpart of InventoryMovement."""
+
+    __tablename__ = "injection_stock_movements"
+
+    id = Column(String, primary_key=True)
+    hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=False)
+    injectable_id = Column(String, index=True, nullable=False)
+    movement_type = Column(String, nullable=False)  # restock | administer | adjustment | expired
+    quantity = Column(Integer, nullable=False)      # signed: +restock, -administer
+    lot_number = Column(String, default="")
+    expiry_date = Column(String, default="")
+    reference_id = Column(String, default="")       # injection_order id for 'administer'
     performed_by = Column(String, nullable=False)
     notes = Column(Text, default="")
     created_at = Column(String, nullable=False)

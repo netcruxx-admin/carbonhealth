@@ -4,7 +4,7 @@ from typing import Iterable, Optional, Sequence, TypeVar
 from uuid import uuid4
 
 from fastapi import HTTPException, Query, Response, status
-from sqlalchemy import func, or_
+from sqlalchemy import Integer, case, cast, func, or_
 from sqlalchemy.orm import Session, aliased
 
 from . import models
@@ -263,21 +263,49 @@ _APPOINTMENT_SORTABLE = {
 DEFAULT_APPOINTMENT_SORT = "-date"
 
 
+def _appointment_minutes_of_day():
+    """`Appointment.time` as minutes since midnight, for ordering.
+
+    The column holds a 12-hour slot label ("09:00 AM"), which sorts wrong as
+    text — "02:00 PM" would come before "09:00 AM". Pull the parts out of the
+    fixed-width label and fold AM/PM into a 24-hour minute count so two visits
+    on the same day come back in clock order. A bare "HH:MM" (no meridiem) is
+    read as already-24-hour.
+    """
+    t = models.Appointment.time
+    hh = cast(func.substr(t, 1, 2), Integer)
+    mm = cast(func.substr(t, 4, 2), Integer)
+    meridiem = func.upper(func.substr(t, 7, 2))
+    hour24 = case(
+        ((meridiem == "AM") & (hh == 12), 0),
+        ((meridiem == "PM") & (hh != 12), hh + 12),
+        else_=hh,
+    )
+    return hour24 * 60 + mm
+
+
 def apply_appointment_sort(query, sort: Optional[str]):
     """Order an appointment query by a `sort` token like `date` or `-status`.
 
     A leading `-` means descending. Anything unrecognised falls back to newest
     first — what the list showed before sorting was a parameter — so the default
     and every bad value behave identically.
+
+    Sorting by `date` also orders by slot time within the day (same direction),
+    so a day's appointments read in clock order rather than insertion order.
     """
     token = (sort or DEFAULT_APPOINTMENT_SORT).strip()
     descending = token.startswith("-")
     key = token[1:] if descending else token
     column = _APPOINTMENT_SORTABLE.get(key)
     if column is None:
-        column, descending = models.Appointment.date, True
-    column = column.desc() if descending else column.asc()
-    return query.order_by(column, models.Appointment.id)
+        key, column, descending = "date", models.Appointment.date, True
+    direction = (lambda c: c.desc()) if descending else (lambda c: c.asc())
+    order = [direction(column)]
+    if key == "date":
+        order.append(direction(_appointment_minutes_of_day()))
+    order.append(models.Appointment.id)
+    return query.order_by(*order)
 
 
 def attach_visit_stats(db: Session, items: Sequence) -> None:

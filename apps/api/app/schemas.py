@@ -52,6 +52,8 @@ DeliveryType = Literal["normal", "c-section", "assisted"]
 ImmunizationStatus = Literal["pending", "given"]
 MedicationOrderStatus = Literal["pending", "dispensed", "administered", "cancelled"]
 InventoryMovementType = Literal["restock", "dispense", "expired", "returned", "adjustment"]
+InjectionOrderStatus = Literal["ordered", "administered", "cancelled"]
+InjectionMovementType = Literal["restock", "administer", "adjustment", "expired"]
 
 
 class CamelModel(BaseModel):
@@ -931,6 +933,7 @@ PATIENT_PROFILE_COLUMNS = (
     "chronic_diseases",
     "emergency_contact",
     "emergency_phone",
+    "emergency_relationship",
     "insurance_provider",
     "insurance_number",
     "aadhaar_number",
@@ -963,6 +966,7 @@ class PatientProfileFields(CamelModel):
     chronic_diseases: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
+    emergency_relationship: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
     #: Twelve digits, checked for transcription rather than verified — see
@@ -1132,6 +1136,7 @@ class PatientOut(OutModel):
     chronic_diseases: str = ""
     emergency_contact: str = ""
     emergency_phone: str = ""
+    emergency_relationship: str = ""
     medical_history: str = ""
     insurance_provider: str = ""
     insurance_number: str = ""
@@ -1946,6 +1951,178 @@ class InventoryAdjustBody(CamelModel):
     def _not_zero(cls, value: int) -> int:
         if value is None or value == 0:
             raise ValueError("An adjustment of zero changes nothing")
+        return value
+
+
+# ---------- Injectables (catalogue + stock) ----------
+
+class InjectableCreate(CamelModel):
+    name: str
+    category: str = ""
+    form: str = ""
+    strength: str = ""
+    route: str = "IM"
+    price: float = 0
+    stock: int = 0
+    reorder_level: int = 10
+    lot_number: str = ""
+    expiry_date: str = ""
+    location: str = ""
+    unit: str = ""
+
+
+class InjectableUpdate(CamelModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    form: Optional[str] = None
+    strength: Optional[str] = None
+    route: Optional[str] = None
+    price: Optional[float] = None
+    stock: Optional[int] = None
+    reorder_level: Optional[int] = None
+    lot_number: Optional[str] = None
+    expiry_date: Optional[str] = None
+    location: Optional[str] = None
+    unit: Optional[str] = None
+
+
+class InjectableOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    name: str
+    category: str = ""
+    form: str = ""
+    strength: str = ""
+    route: str = "IM"
+    price: float = 0
+    stock: int = 0
+    reorder_level: int = 10
+    lot_number: str = ""
+    expiry_date: str = ""
+    location: str = ""
+    unit: str = ""
+
+
+class InjectionRestockBody(CamelModel):
+    injectable_id: str
+    #: Units arriving. Positive by definition — removing stock is an adjustment,
+    #: which says which kind.
+    quantity: int
+    lot_number: str = ""
+    expiry_date: str = ""
+    notes: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def _positive(cls, value: int) -> int:
+        if value is None or value < 1:
+            raise ValueError("Restock quantity must be at least 1")
+        return value
+
+
+class InjectionAdjustBody(CamelModel):
+    injectable_id: str
+    #: Signed: negative writes stock off, positive corrects a count upwards.
+    quantity: int
+    movement_type: InjectionMovementType = "adjustment"
+    notes: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def _not_zero(cls, value: int) -> int:
+        if value is None or value == 0:
+            raise ValueError("An adjustment of zero changes nothing")
+        return value
+
+
+class InjectionStockMovementOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    injectable_id: str
+    movement_type: InjectionMovementType
+    quantity: int
+    lot_number: str = ""
+    expiry_date: str = ""
+    reference_id: str = ""
+    performed_by: str
+    notes: str = ""
+    created_at: str
+    injectable_name: Optional[str] = None
+    performed_by_name: Optional[str] = None
+
+
+# ---------- Injection orders ----------
+
+class InjectionOrderCreate(CamelModel):
+    appointment_id: Optional[str] = None
+    patient_id: str
+    #: Who ordered it. Omitted when the caller is the doctor — the server fills
+    #: in their own id, because the prescriber is a fact about what happened.
+    #: A non-doctor recording an order someone else wrote must name them.
+    doctor_id: Optional[str] = None
+    prescription_id: Optional[str] = None
+    injectable_id: Optional[str] = None
+    injectable_name: str
+    dose: str = ""
+    route: str = "IM"
+    #: Vials/ampoules the administration consumes.
+    quantity: int = 1
+    scheduled_for: str = ""
+    instructions: str = ""
+
+    @field_validator("quantity")
+    @classmethod
+    def _at_least_one(cls, value: int) -> int:
+        if value is None or value < 1:
+            raise ValueError("Quantity must be at least 1")
+        return value
+
+
+class InjectionOrderOut(OutModel):
+    id: str
+    hospital_id: Optional[str] = None
+    appointment_id: Optional[str] = None
+    patient_id: str
+    doctor_id: str
+    prescription_id: Optional[str] = None
+    injectable_id: Optional[str] = None
+    injectable_name: str = ""
+    dose: str = ""
+    route: str = "IM"
+    quantity: int = 1
+    scheduled_for: str = ""
+    instructions: str = ""
+    status: InjectionOrderStatus = "ordered"
+    site: str = ""
+    notes: str = ""
+    administered_by: Optional[str] = None
+    administered_at: Optional[str] = None
+    ordered_at: str
+    patient_name: Optional[str] = None
+    patient_phone: Optional[str] = None
+    doctor_name: Optional[str] = None
+    administered_by_name: Optional[str] = None
+    #: Catalogue stock on hand, so the nurse's queue can flag a shot that
+    #: cannot currently be given.
+    stock_on_hand: Optional[int] = None
+
+
+class InjectionAdministerBody(CamelModel):
+    """What the nurse records at the moment the shot is given.
+
+    `site` is required by the endpoint for every injection route. `quantity`
+    overrides the order's planned count if what was actually drawn up differs.
+    """
+
+    site: str = ""
+    notes: str = ""
+    quantity: Optional[int] = None
+
+    @field_validator("quantity")
+    @classmethod
+    def _at_least_one(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and value < 1:
+            raise ValueError("Quantity must be at least 1")
         return value
 
 

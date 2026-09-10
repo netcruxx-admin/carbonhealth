@@ -115,6 +115,7 @@ def _body_foreign_keys() -> dict:
                 "order_id": models.TestOrder,
                 "test_id": models.LabTest,
                 "medicine_id": models.Medicine,
+                "injectable_id": models.Injectable,
                 "prescription_id": models.Prescription,
             }
         )

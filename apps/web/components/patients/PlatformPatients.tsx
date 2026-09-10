@@ -13,6 +13,7 @@ import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
+import { fmtAge } from '@/lib/date';
 import type { Patient } from '@/lib/types';
 import {
   useGetSuperadminPatientsPagedQuery,
@@ -94,7 +95,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
                   {/* "Visits", not "Appointments": the API counts completed ones. */}
-                  {['Name', 'Email', 'Gender', 'Blood Group', 'Phone', 'Visits'].map((h) => (
+                  {['Name', 'Email', 'Gender', 'Age', 'Blood Group', 'Phone', 'Visits'].map((h) => (
                     <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                   ))}
                   <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
@@ -111,6 +112,7 @@ export function PlatformPatients({ session }: RoleViewProps) {
                     <td className="py-3 px-6 font-medium text-slate-900">{p.user?.name ?? '—'}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.email ?? '—'}</td>
                     <td className="py-3 px-6 text-slate-600 capitalize">{p.gender || '—'}</td>
+                    <td className="py-3 px-6 text-slate-600">{fmtAge(p.dateOfBirth)}</td>
                     <td className="py-3 px-6 text-slate-600">{p.bloodGroup || '—'}</td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.phone || '—'}</td>
                     <td className="py-3 px-6 font-semibold text-slate-900">{p.visitCount ?? 0}</td>
