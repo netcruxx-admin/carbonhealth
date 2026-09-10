@@ -72,19 +72,16 @@ export function PatientRecords({ session }: RoleViewProps) {
                     <span className="text-xs text-slate-400">{fmtDate(v.createdAt)}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature}°F</p></div>
-                    <div><p className="text-slate-500">Blood Pressure</p><p className="font-medium">{v.bloodPressure}</p></div>
-                    <div><p className="text-slate-500">Heart Rate</p><p className="font-medium">{v.heartRate} bpm</p></div>
-                    <div><p className="text-slate-500">Respiratory Rate</p><p className="font-medium">{v.respiratoryRate} /min</p></div>
-                    <div><p className="text-slate-500">Weight</p><p className="font-medium">{v.weight} kg</p></div>
-                    <div><p className="text-slate-500">Height</p><p className="font-medium">{v.height} cm</p></div>
+                    <div><p className="text-slate-500">BP</p><p className="font-medium">{v.bloodPressure || '—'}</p></div>
+                    <div><p className="text-slate-500">Height</p><p className="font-medium">{v.height ? `${v.height} cm` : '—'}</p></div>
+                    <div><p className="text-slate-500">Pulse</p><p className="font-medium">{v.heartRate ? `${v.heartRate} bpm` : '—'}</p></div>
+                    <div><p className="text-slate-500">Weight</p><p className="font-medium">{v.weight ? `${v.weight} kg` : '—'}</p></div>
+                    <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature ? `${v.temperature}°F` : '—'}</p></div>
+                    <div><p className="text-slate-500">BMI</p><p className="font-medium">{v.bmi ? `${v.bmi}` : '—'}</p></div>
+                    <div><p className="text-slate-500">LMP</p><p className="font-medium">{fmtDate(v.lmp)}</p></div>
+                    <div><p className="text-slate-500">EDD</p><p className="font-medium">{fmtDate(v.edd)}</p></div>
+                    <div><p className="text-slate-500">POG</p><p className="font-medium">{v.pog || '—'}</p></div>
                   </div>
-                  {v.notes && (
-                    <div className="mt-4 pt-4 border-t border-slate-100 text-sm">
-                      <p className="text-slate-500 mb-1">Notes</p>
-                      <p className="text-slate-700">{v.notes}</p>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText, FlaskConical, Pencil, Pill, Trash2 } from 'lucide-react';
+import { fmtDate } from '@/lib/date';
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
   ordered:          { label: 'Ordered',          cls: 'bg-blue-100 text-blue-700' },
@@ -197,16 +198,18 @@ export function ClinicalSections({
       {vitals.length > 0 && (
         <div className="mb-8">
           <SectionHeader icon={FileText} title="Vitals" count={vitals.length} />
-          <Table head={['Temp', 'Blood Pressure', 'Heart Rate', 'Resp. Rate', 'Weight', 'Height', 'Notes', ...(canManage ? ['Actions'] : [])]}>
+          <Table head={['BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'LMP', 'EDD', 'POG', ...(canManage ? ['Actions'] : [])]}>
             {vitals.map((v) => (
               <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50">
-                <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
                 <td className="py-3 px-4 text-slate-600">{v.bloodPressure || '—'}</td>
-                <td className="py-3 px-4 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
-                <td className="py-3 px-4 text-slate-600">{v.respiratoryRate ? `${v.respiratoryRate}/min` : '—'}</td>
-                <td className="py-3 px-4 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
                 <td className="py-3 px-4 text-slate-600">{v.height ? `${v.height} cm` : '—'}</td>
-                <td className="py-3 px-4 text-slate-500 max-w-xs truncate">{v.notes || '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{v.bmi ? `${v.bmi}` : '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{fmtDate(v.lmp)}</td>
+                <td className="py-3 px-4 text-slate-600">{fmtDate(v.edd)}</td>
+                <td className="py-3 px-4 text-slate-600">{v.pog || '—'}</td>
                 {canManage && (
                   <ActionButtons
                     onEdit={() => onEditVitals?.(v)}

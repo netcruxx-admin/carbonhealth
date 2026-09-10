@@ -40,7 +40,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 import { formatPatientAddress, formatRelationLine } from '@/components/patients/patientProfile';
 import { maskAadhaar } from '@/lib/aadhaar';
-import { fmtAge } from '@/lib/date';
+import { fmtAge, fmtDate } from '@/lib/date';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -262,12 +262,15 @@ export default function PatientDetailPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-600" /> Latest Vitals <span className="text-xs font-normal text-slate-400">({latest.createdAt.split('T')[0]})</span></h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <Vital label="Temp" value={latest.temperature ? `${latest.temperature}°F` : '—'} />
-              <Vital label="Blood Pressure" value={latest.bloodPressure || '—'} />
-              <Vital label="Heart Rate" value={latest.heartRate ? `${latest.heartRate} bpm` : '—'} />
-              <Vital label="Resp. Rate" value={latest.respiratoryRate ? `${latest.respiratoryRate}/min` : '—'} />
-              <Vital label="Weight" value={latest.weight ? `${latest.weight} kg` : '—'} />
+              <Vital label="BP" value={latest.bloodPressure || '—'} />
               <Vital label="Height" value={latest.height ? `${latest.height} cm` : '—'} />
+              <Vital label="Pulse" value={latest.heartRate ? `${latest.heartRate} bpm` : '—'} />
+              <Vital label="Weight" value={latest.weight ? `${latest.weight} kg` : '—'} />
+              <Vital label="Temp" value={latest.temperature ? `${latest.temperature}°F` : '—'} />
+              <Vital label="BMI" value={latest.bmi ? `${latest.bmi}` : '—'} />
+              <Vital label="LMP" value={fmtDate(latest.lmp)} />
+              <Vital label="EDD" value={fmtDate(latest.edd)} />
+              <Vital label="POG" value={latest.pog || '—'} />
             </div>
           </div>
         )}
@@ -307,17 +310,19 @@ export default function PatientDetailPage() {
           {model.vitals.length === 0 ? (
             <Empty text="No vitals recorded." />
           ) : (
-            <TableWrap head={['Date', 'Temp', 'BP', 'HR', 'Resp.', 'Weight', 'Height', 'Notes']}>
+            <TableWrap head={['Date', 'BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'LMP', 'EDD', 'POG']}>
               {model.vitals.map((v) => (
                 <tr key={v.id} className="border-b hover:bg-slate-50">
                   <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{v.createdAt.split('T')[0]}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
                   <td className="py-3 px-6 text-slate-600">{v.bloodPressure || '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.heartRate || '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.respiratoryRate || '—'}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
                   <td className="py-3 px-6 text-slate-600">{v.height ? `${v.height} cm` : '—'}</td>
-                  <td className="py-3 px-6 text-slate-500 max-w-xs truncate">{v.notes || '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.bmi ? `${v.bmi}` : '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{fmtDate(v.lmp)}</td>
+                  <td className="py-3 px-6 text-slate-600">{fmtDate(v.edd)}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.pog || '—'}</td>
                 </tr>
               ))}
             </TableWrap>
