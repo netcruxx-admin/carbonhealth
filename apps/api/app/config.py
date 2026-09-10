@@ -89,9 +89,17 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     resend_from: str = ""  # e.g. "NetCare <no-reply@yourdomain.com>"
 
-    # Path to the Firebase service account JSON, relative to the api/ directory.
-    # The file must never be committed to git (.gitignore already covers it).
-    # Leave empty to disable push notifications (e.g. in CI or unit tests).
+    # Firebase service account credential for push notifications. Two ways to
+    # supply it; the first one set wins:
+    #   1. firebase_service_account_json — the whole JSON file as one value,
+    #      either raw or base64-encoded. For hosts with no persistent,
+    #      uploadable filesystem (Railway, Fly, most PaaS).
+    #   2. firebase_service_account — path to the JSON file on disk, relative
+    #      to the api/ directory. A local-dev convenience; the file must never
+    #      be committed (.gitignore already covers it).
+    # Leave both empty to disable push notifications (CI, unit tests, a fresh
+    # checkout) — the API still starts normally.
+    firebase_service_account_json: str = ""
     firebase_service_account: str = "firebase-service-account.json"
 
     # Bootstrap credentials for the platform superadmin, created on first boot.

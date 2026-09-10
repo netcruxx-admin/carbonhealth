@@ -45,6 +45,22 @@ Considered and rejected — recorded so this doesn't get re-litigated without re
 - **Video consult starting soon** (`video_slots.py`) — same problem, same fix needed. Booking a slot itself doesn't need its own notification (it's a secondary step right after the appointment-booked push already fires), but a pre-consult reminder is genuinely valuable and is purely time-based.
 - **Doctor became unavailable / schedule conflict** (`schedule.py`, `create_schedule_block`) — creating a block does **not** check for or touch existing appointments anywhere in the current code; there is no time-range overlap logic in the codebase at all (`ScheduleBlock.start_time`/`end_time` and `Appointment.time` are free-text strings like `"10:00 AM"`, never compared against each other). Notifying affected patients requires building that conflict-detection first — a real feature, not a notification wire-up.
 
+## Deployment
+
+Push notifications need credentials wired into **both** deployments, plus HTTPS.
+
+**Backend** (`_resolve_credential_source()` in `notify.py`, first match wins):
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — the whole service account file as one env var, raw JSON or base64. Use this on Railway / any host without a persistent, uploadable filesystem.
+- `FIREBASE_SERVICE_ACCOUNT` — path to the file on disk (local dev only; gitignored).
+- Neither set → `notify.send()` is a logged no-op; the API still boots.
+- `CORS_ORIGINS` must list the production frontend origin(s) or every API call (including `POST /notifications/token`) fails — and the API refuses to boot in production if it's empty. `ROOT_DOMAIN=<apex>` makes the CORS regex auto-allow `https://<tenant>.<apex>`.
+
+**Frontend**:
+- All six `NEXT_PUBLIC_FIREBASE_*` vars (`API_KEY`, `AUTH_DOMAIN`, `PROJECT_ID`, `MESSAGING_SENDER_ID`, `APP_ID`, `VAPID_KEY`). `NEXT_PUBLIC_*` is inlined at **build time** — adding them needs a fresh build/redeploy, not a restart.
+- `apps/web/public/firebase-messaging-sw.js` has the Firebase config **hardcoded** (service workers can't read env vars). It must match the project the backend's service account belongs to. Currently pinned to project `netcare-5dd8e`. After deploy, confirm `https://<host>/firebase-messaging-sw.js` loads.
+
+**Both**: web push requires HTTPS. Each tenant subdomain is a separate origin, so the service worker and FCM token are per-subdomain — fine functionally (the token still maps to the user's id server-side), but the SW file must be reachable on every subdomain (it is — same Next app).
+
 ## Adding a new notification
 
 1. Pick the right targeting helper: `notify_patient` / `notify_doctor` for a single owning record, `notify_role` for "everyone who does X at this hospital."

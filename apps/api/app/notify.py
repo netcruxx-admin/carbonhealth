@@ -9,9 +9,12 @@ Usage anywhere in the backend:
     notify.send(db, user_id="user-abc123", title="Appointment", body="...")
 """
 
+import base64
+import binascii
+import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from sqlalchemy.orm import Session
 
@@ -24,6 +27,43 @@ _app = None          # firebase_admin.App, once initialised
 _initialized = False # True once we've tried (even if it failed)
 
 
+def _resolve_credential_source() -> Optional[Union[dict, str]]:
+    """Where the service account comes from — a parsed dict from an env var,
+    or a path to a file on disk. Returns None when neither is configured."""
+    raw = settings.firebase_service_account_json.strip()
+    if raw:
+        # Accept the JSON either verbatim or base64-encoded — a single-line
+        # env var mangles newlines and quotes less often when it is base64.
+        if not raw.lstrip().startswith("{"):
+            try:
+                raw = base64.b64decode(raw).decode("utf-8")
+            except (binascii.Error, UnicodeDecodeError):
+                log.error(
+                    "FIREBASE_SERVICE_ACCOUNT_JSON is neither JSON nor base64 — "
+                    "push notifications disabled."
+                )
+                return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            log.error(
+                "FIREBASE_SERVICE_ACCOUNT_JSON did not parse as JSON — "
+                "push notifications disabled."
+            )
+            return None
+
+    sa_path = Path(__file__).resolve().parent.parent / settings.firebase_service_account
+    if sa_path.exists():
+        return str(sa_path)
+
+    log.warning(
+        "No Firebase credential (FIREBASE_SERVICE_ACCOUNT_JSON unset, no file at %s) "
+        "— push notifications disabled.",
+        sa_path,
+    )
+    return None
+
+
 def _get_app():
     """Return the Firebase Admin app, initialising it on the first call."""
     global _app, _initialized
@@ -31,21 +71,20 @@ def _get_app():
         return _app
 
     _initialized = True
-    sa_path = Path(__file__).resolve().parent.parent / settings.firebase_service_account
-
-    if not sa_path.exists():
-        log.warning(
-            "Firebase service account not found at %s — push notifications disabled.",
-            sa_path,
-        )
+    source = _resolve_credential_source()
+    if source is None:
         return None
 
     try:
         import firebase_admin
         from firebase_admin import credentials
-        cred = credentials.Certificate(str(sa_path))
+        # credentials.Certificate takes a file path or a parsed dict.
+        cred = credentials.Certificate(source)
         _app = firebase_admin.initialize_app(cred)
-        log.info("Firebase Admin initialised from %s", sa_path)
+        log.info(
+            "Firebase Admin initialised (%s)",
+            "from JSON env var" if isinstance(source, dict) else f"from {source}",
+        )
     except Exception:
         log.exception("Failed to initialise Firebase Admin — push notifications disabled.")
         _app = None
