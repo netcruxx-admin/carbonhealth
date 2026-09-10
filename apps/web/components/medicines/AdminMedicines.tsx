@@ -6,7 +6,6 @@ import * as Yup from 'yup';
 import { Plus, X, Pill, AlertTriangle, Search, Pencil, Trash2, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Medicine } from '@/lib/types';
-import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import { FormattedDate } from '@/components/ui/FormattedDate';
@@ -50,7 +49,12 @@ const medicineSchema = Yup.object({
 const categoryOptions = CATEGORIES.map((c) => ({ value: c, label: c }));
 const formOptions = FORMS.map((f) => ({ value: f, label: f }));
 
-export function AdminMedicines({ session }: RoleViewProps) {
+/**
+ * Medicine catalogue (search, filter, export, CRUD). Rendered as the
+ * "Catalogue" sub-tab of the Medicines section on the combined Inventory page
+ * (see InventoryHub); it no longer owns a route or a DashboardShell of its own.
+ */
+export function AdminMedicinesPanel({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Medicine | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleting, setDeleting] = useState<Medicine | null>(null);
@@ -104,7 +108,7 @@ export function AdminMedicines({ session }: RoleViewProps) {
       : 'bg-green-100 text-green-700';
 
   return (
-    <DashboardShell role={session.user.role} userName={session.user.name} title="Medicines" subtitle="Pharmacy catalog">
+    <>
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -344,6 +348,6 @@ export function AdminMedicines({ session }: RoleViewProps) {
           { label: 'Storage location', value: viewing?.location },
         ]}
       />
-    </DashboardShell>
+    </>
   );
 }

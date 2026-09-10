@@ -1,7 +1,7 @@
 'use client';
 
 import { RoleView } from '@/components/RoleView';
-import { InventoryManagement } from '@/components/inventory/InventoryManagement';
+import { InventoryHub } from '@/components/inventory/InventoryHub';
 import { adminRole, pharmacistRole } from '@/lib/roles';
 
 export default function InventoryPage() {
@@ -9,8 +9,8 @@ export default function InventoryPage() {
     <RoleView
       path="/dashboard/inventory"
       views={{
-        [pharmacistRole]: InventoryManagement,
-        [adminRole]: InventoryManagement,
+        [pharmacistRole]: InventoryHub,
+        [adminRole]: InventoryHub,
       }}
     />
   );

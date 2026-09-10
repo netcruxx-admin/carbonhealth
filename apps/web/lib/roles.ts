@@ -310,10 +310,14 @@ export const dashboardRoutes: DashboardRoute[] = [
     },
   },
   {
+    // One screen for stock: Medicines and Injectables tabs, each with a
+    // catalogue and a stock/movements view. `inventory.read` is the gate every
+    // admin and pharmacist holds; the page itself hides a tab whose finer
+    // permission (medicines.read / injectables.read) is missing.
     path: '/dashboard/inventory',
     label: 'Inventory',
     icon: Package,
-    viewRoles: [pharmacistRole, adminRole],
+    viewRoles: [adminRole, pharmacistRole],
     permission: 'inventory.read',
     module: 'pharmacy',
   },
@@ -329,14 +333,6 @@ export const dashboardRoutes: DashboardRoute[] = [
       [nurseRole]: 'Shots to Administer',
       [pharmacistRole]: 'Injection Orders',
     },
-  },
-  {
-    path: '/dashboard/injectables',
-    label: 'Injectables',
-    icon: Syringe,
-    viewRoles: [pharmacistRole, adminRole],
-    permission: 'injectables.read',
-    module: 'pharmacy',
   },
   {
     path: '/dashboard/billing',
@@ -415,14 +411,8 @@ export const dashboardRoutes: DashboardRoute[] = [
     // creates, renames and deletes them, and that is the platform's call.
     permission: 'departments.manage',
   },
-  {
-    path: '/dashboard/medicines',
-    label: 'Medicines',
-    icon: Pill,
-    viewRoles: [adminRole, pharmacistRole],
-    permission: 'medicines.read',
-    module: 'pharmacy',
-  },
+  // Medicines and Injectables catalogues moved into /dashboard/inventory as
+  // tabs — one Inventory screen instead of three sidebar entries.
   // ── Account ───────────────────────────────────────────────────────────────
   {
     path: '/dashboard/profile',
