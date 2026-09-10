@@ -66,6 +66,7 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
               as="textarea"
               rows={3}
               placeholder="e.g. Acute pharyngitis, viral etiology"
+              dictation
             />
             <FormField
               name="prescription"
@@ -73,6 +74,7 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
               as="textarea"
               rows={3}
               placeholder="e.g. Tab Azithromycin 500 mg OD × 3 days, plenty of fluids"
+              dictation
             />
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
