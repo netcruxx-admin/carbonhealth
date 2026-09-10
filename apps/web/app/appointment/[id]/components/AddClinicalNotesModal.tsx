@@ -5,7 +5,11 @@ import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { X } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
-import { useCreateMedicalRecordMutation } from '@/store/api';
+import {
+  useCreateMedicalRecordMutation,
+  useUpdateMedicalRecordMutation,
+} from '@/store/api';
+import type { MedicalRecord } from '@/lib/types';
 import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
 import { Spinner } from '@/components/ui/spinner';
@@ -14,6 +18,10 @@ interface Props {
   appointmentId: string;
   patientId: string;
   doctorId: string;
+  /** When present the modal edits this note in place instead of creating a new
+   *  one — reopening clinical notes for a visit should show what is already
+   *  there, not a blank form that stacks a duplicate row on save. */
+  existing?: MedicalRecord | null;
   onClose: () => void;
   onSaved: (msg: string) => void;
 }
@@ -26,33 +34,62 @@ const schema = Yup.object({
   !!(values.diagnosis?.trim() || values.treatmentAdvice?.trim() || values.followUpAdvice?.trim()),
 );
 
-export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onClose, onSaved }: Props) {
+export function AddClinicalNotesModal({
+  appointmentId,
+  patientId,
+  doctorId,
+  existing,
+  onClose,
+  onSaved,
+}: Props) {
   const [createMedicalRecord] = useCreateMedicalRecordMutation();
+  const [updateMedicalRecord] = useUpdateMedicalRecordMutation();
   const [error, setError] = useState('');
+
+  const isEdit = !!existing;
 
   return (
     <Modal maxWidth="max-w-lg" scroll>
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-slate-900">Add Clinical Notes</h2>
+        <h2 className="text-xl font-bold text-slate-900">
+          {isEdit ? 'Edit Clinical Notes' : 'Add Clinical Notes'}
+        </h2>
         <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
           <X className="w-5 h-5" />
         </button>
       </div>
       <Formik
-        initialValues={{ diagnosis: '', treatmentAdvice: '', followUpAdvice: '' }}
+        enableReinitialize
+        initialValues={{
+          diagnosis: existing?.diagnosis ?? '',
+          treatmentAdvice: existing?.treatmentAdvice ?? '',
+          followUpAdvice: existing?.followUpAdvice ?? '',
+        }}
         validationSchema={schema}
         onSubmit={async (values, { setSubmitting }) => {
           setError('');
           try {
-            await createMedicalRecord({
-              appointmentId,
-              patientId,
-              doctorId,
-              diagnosis: values.diagnosis.trim() || undefined,
-              treatmentAdvice: values.treatmentAdvice.trim() || undefined,
-              followUpAdvice: values.followUpAdvice.trim() || undefined,
-            }).unwrap();
-            onSaved('Clinical notes saved');
+            if (existing) {
+              // Send the trimmed values verbatim (empty string included) so a
+              // field the doctor cleared is actually cleared.
+              await updateMedicalRecord({
+                id: existing.id,
+                diagnosis: values.diagnosis.trim(),
+                treatmentAdvice: values.treatmentAdvice.trim(),
+                followUpAdvice: values.followUpAdvice.trim(),
+              }).unwrap();
+              onSaved('Clinical notes updated');
+            } else {
+              await createMedicalRecord({
+                appointmentId,
+                patientId,
+                doctorId,
+                diagnosis: values.diagnosis.trim() || undefined,
+                treatmentAdvice: values.treatmentAdvice.trim() || undefined,
+                followUpAdvice: values.followUpAdvice.trim() || undefined,
+              }).unwrap();
+              onSaved('Clinical notes saved');
+            }
           } catch (err) {
             setError(apiError(err, 'Could not save clinical notes'));
           } finally {
@@ -102,7 +139,7 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
                 disabled={isSubmitting}
                 className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
-                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Notes'}
+                {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEdit ? 'Update Notes' : 'Save Notes'}
               </button>
             </div>
           </Form>

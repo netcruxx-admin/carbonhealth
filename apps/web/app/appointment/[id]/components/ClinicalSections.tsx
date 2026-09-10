@@ -93,6 +93,8 @@ export function ClinicalSections({
   onDeletePrescription,
   onEditVitals,
   onDeleteVitals,
+  canEditRecord = false,
+  onEditRecord,
   onDeleteTestOrder,
 }: {
   prescriptions: any[];
@@ -107,6 +109,8 @@ export function ClinicalSections({
   onDeletePrescription?: (id: string) => void;
   onEditVitals?: (v: any) => void;
   onDeleteVitals?: (id: string) => void;
+  canEditRecord?: boolean;
+  onEditRecord?: (record: any) => void;
   onDeleteTestOrder?: (id: string) => void;
 }) {
   return (
@@ -225,7 +229,7 @@ export function ClinicalSections({
       {medicalRecords.length > 0 && (
         <div>
           <SectionHeader icon={FileText} title="Medical Records" count={medicalRecords.length} />
-          <Table head={['Diagnosis', 'Treatment Advice', 'Follow-up Advice', 'Lab Reports']}>
+          <Table head={['Diagnosis', 'Treatment Advice', 'Follow-up Advice', 'Lab Reports', ...(canEditRecord ? ['Actions'] : [])]}>
             {medicalRecords.map((record) => (
               <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50">
                 <td className="py-3 px-4 font-medium text-slate-900">{record.diagnosis || '—'}</td>
@@ -234,6 +238,7 @@ export function ClinicalSections({
                 <td className="py-3 px-4 text-slate-500">
                   {record.labReports?.length > 0 ? record.labReports.join(', ') : '—'}
                 </td>
+                {canEditRecord && <ActionButtons onEdit={() => onEditRecord?.(record)} />}
               </tr>
             ))}
           </Table>

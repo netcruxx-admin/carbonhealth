@@ -65,6 +65,7 @@ export default function AppointmentDetailPage() {
     isAdmin,
     canManage,
     canOrderInjection,
+    canManageClinicalNotes,
     canDeletePrescription,
     canDeleteVitals,
     canDeleteTestOrder,
@@ -77,6 +78,7 @@ export default function AppointmentDetailPage() {
   const [modal, setModal] = useState<OpenModal>(null);
   const [editRx, setEditRx] = useState<any>(null);
   const [editVitals, setEditVitals] = useState<any>(null);
+  const [editRecord, setEditRecord] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'rx' | 'vitals' | 'order';
     id: string;
@@ -85,7 +87,7 @@ export default function AppointmentDetailPage() {
     confirmLabel: string;
   } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const closeModal = () => { setModal(null); setEditRx(null); setEditVitals(null); };
+  const closeModal = () => { setModal(null); setEditRx(null); setEditVitals(null); setEditRecord(null); };
   // Close a modal and refresh the page data with a toast.
   const afterSave = (msg: string) => {
     reloadDetails();
@@ -244,6 +246,7 @@ export default function AppointmentDetailPage() {
           isAdmin={isAdmin}
           canManage={canManage}
           canOrderInjection={canOrderInjection}
+          canClinicalNotes={canManageClinicalNotes}
           canReschedule={canReschedule}
           canComplete={canComplete}
           canCancel={canCancel}
@@ -279,6 +282,8 @@ export default function AppointmentDetailPage() {
           onDeletePrescription={handleDeletePrescription}
           onEditVitals={(v) => { setEditVitals(v); setModal('edit-vitals'); }}
           onDeleteVitals={handleDeleteVitals}
+          canEditRecord={canManageClinicalNotes}
+          onEditRecord={(rec) => { setEditRecord(rec); setModal('notes'); }}
           onDeleteTestOrder={handleCancelTestOrder}
         />
       </div>
@@ -320,6 +325,7 @@ export default function AppointmentDetailPage() {
           appointmentId={appointmentId}
           patientId={appointment.patientId}
           doctorId={appointment.doctorId}
+          existing={editRecord ?? details.medicalRecords[0] ?? null}
           onClose={closeModal}
           onSaved={afterSave}
         />

@@ -600,6 +600,13 @@ export interface MedicalRecordCreateBody {
   followUpAdvice?: string;
   labReports?: string[];
 }
+export interface MedicalRecordUpdateBody {
+  id: string;
+  diagnosis?: string;
+  treatmentAdvice?: string;
+  followUpAdvice?: string;
+  labReports?: string[];
+}
 export interface PrescriptionCreateBody {
   appointmentId: string;
   patientId: string;
@@ -1478,6 +1485,10 @@ export const api = createApi({
       query: (body) => ({ url: '/medical-records', method: 'POST', body }),
       invalidatesTags: [{ type: 'MedicalRecord', id: 'LIST' }],
     }),
+    updateMedicalRecord: build.mutation<MedicalRecord, MedicalRecordUpdateBody>({
+      query: ({ id, ...body }) => ({ url: `/medical-records/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'MedicalRecord', id: 'LIST' }],
+    }),
 
     // ── Prescriptions ─────────────────────────────────────────────────────────
     listPrescriptions: build.query<
@@ -2175,6 +2186,7 @@ export const {
   useDeleteDepartmentMutation,
   useListMedicalRecordsQuery,
   useCreateMedicalRecordMutation,
+  useUpdateMedicalRecordMutation,
   useListPrescriptionsQuery,
   useListPrescriptionsPagedQuery,
   useLazyListPrescriptionsPagedQuery,

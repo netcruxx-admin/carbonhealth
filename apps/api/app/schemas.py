@@ -1381,6 +1381,16 @@ class MedicalRecordCreate(CamelModel):
     lab_reports: List[str] = []
 
 
+class MedicalRecordUpdate(CamelModel):
+    # Only the clinical text is editable — a record cannot be moved to another
+    # patient, doctor or appointment. Every field optional so a caller can PATCH
+    # one line without blanking the rest (model_dump(exclude_unset=True)).
+    diagnosis: Optional[str] = None
+    treatment_advice: Optional[str] = None
+    follow_up_advice: Optional[str] = None
+    lab_reports: Optional[List[str]] = None
+
+
 class MedicalRecordOut(OutModel):
     id: str
     patient_id: str

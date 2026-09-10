@@ -26,6 +26,7 @@ interface ActionsToolbarProps {
   isAdmin: boolean;
   canManage: boolean;
   canOrderInjection: boolean;
+  canClinicalNotes: boolean;
   canReschedule: boolean;
   canComplete: boolean;
   canCancel: boolean;
@@ -50,6 +51,7 @@ export function ActionsToolbar({
   isAdmin,
   canManage,
   canOrderInjection,
+  canClinicalNotes,
   canReschedule,
   canComplete,
   canCancel,
@@ -93,9 +95,11 @@ export function ActionsToolbar({
           <button onClick={onVitals} className={secondaryBtn}>
             <Activity className="w-4 h-4" /> Record Vitals
           </button>
-          <button onClick={onClinicalNotes} className={secondaryBtn}>
-            <FileText className="w-4 h-4" /> Clinical Notes
-          </button>
+          {canClinicalNotes && (
+            <button onClick={onClinicalNotes} className={secondaryBtn}>
+              <FileText className="w-4 h-4" /> Clinical Notes
+            </button>
+          )}
           <button onClick={onPrescription} className={secondaryBtn}>
             <Pill className="w-4 h-4" /> Add Prescription
           </button>

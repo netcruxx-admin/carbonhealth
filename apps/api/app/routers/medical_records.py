@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
@@ -69,6 +69,36 @@ def create_record(
         **body.model_dump(),
     )
     db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@router.put("/{record_id}", response_model=schemas.MedicalRecordOut)
+def update_record(
+    record_id: str,
+    body: schemas.MedicalRecordUpdate,
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    scope: str = Depends(require_permission("medical_records.manage")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    # The clinical-notes modal edits the note already on a visit rather than
+    # stacking a second row every time it is reopened. Only the text changes —
+    # the patient/doctor/appointment a record belongs to is fixed.
+    query = scoped(db, models.MedicalRecord, tenant_id).filter(
+        models.MedicalRecord.id == record_id
+    )
+    if scope == SCOPE_OWN:
+        query = query.filter(own_record_filter(db, user, models.MedicalRecord))
+    record = query.first()
+    if record is None:
+        # Absent or not the caller's — a 404 either way, so a probe cannot
+        # confirm an id exists in another doctor's records.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical record not found")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(record, field, value)
     db.commit()
     db.refresh(record)
     return record
