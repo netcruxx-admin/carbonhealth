@@ -931,6 +931,7 @@ PATIENT_PROFILE_COLUMNS = (
     "chronic_diseases",
     "emergency_contact",
     "emergency_phone",
+    "emergency_relationship",
     "insurance_provider",
     "insurance_number",
     "aadhaar_number",
@@ -963,6 +964,7 @@ class PatientProfileFields(CamelModel):
     chronic_diseases: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_phone: Optional[str] = None
+    emergency_relationship: Optional[str] = None
     insurance_provider: Optional[str] = None
     insurance_number: Optional[str] = None
     #: Twelve digits, checked for transcription rather than verified — see
@@ -1132,6 +1134,7 @@ class PatientOut(OutModel):
     chronic_diseases: str = ""
     emergency_contact: str = ""
     emergency_phone: str = ""
+    emergency_relationship: str = ""
     medical_history: str = ""
     insurance_provider: str = ""
     insurance_number: str = ""

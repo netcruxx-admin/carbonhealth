@@ -502,6 +502,8 @@ class Patient(Base):
     chronic_diseases = Column(Text, default="")
     emergency_contact = Column(String, default="")
     emergency_phone = Column(String, default="")
+    # How the emergency contact is related to the patient, e.g. "Spouse".
+    emergency_relationship = Column(String, default="")
     medical_history = Column(Text, default="")
     insurance_provider = Column(String, default="")
     insurance_number = Column(String, default="")

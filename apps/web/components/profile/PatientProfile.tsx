@@ -36,6 +36,7 @@ interface FormValues {
   phone: string;
   emergencyContact: string;
   emergencyPhone: string;
+  emergencyRelationship: string;
   bloodGroup: string;
   allergies: string;
   chronicDiseases: string;
@@ -65,7 +66,7 @@ const schema = Yup.object({
 // Fields that belong to each step — used to scope Next-button validation.
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
   1: ['name', 'email', 'dateOfBirth', 'gender', 'aadhaarNumber'],
-  2: ['phone', 'emergencyContact', 'emergencyPhone', 'addressLine1', 'city', 'pincode'],
+  2: ['phone', 'emergencyContact', 'emergencyPhone', 'emergencyRelationship', 'addressLine1', 'city', 'pincode'],
   3: ['bloodGroup', 'allergies', 'chronicDiseases'],
   4: ['insuranceProvider', 'insuranceNumber'],
 };
@@ -166,6 +167,11 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
               placeholder="e.g. Priya Sharma"
             />
             <PhoneField name="emergencyPhone" label="Emergency Contact Phone" />
+            <FormField
+              name="emergencyRelationship"
+              label="Relationship to You"
+              placeholder="e.g. Spouse, Parent, Sibling"
+            />
           </div>
           <PatientAddressFields />
         </div>
@@ -355,6 +361,10 @@ export function PatientProfile({ session }: RoleViewProps) {
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Emergency Phone</dt>
                     <dd className="text-slate-800 font-medium">{patient?.emergencyPhone || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Relationship</dt>
+                    <dd className="text-slate-800 font-medium">{patient?.emergencyRelationship || 'None'}</dd>
                   </div>
                   <div className="sm:col-span-2">
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Address</dt>

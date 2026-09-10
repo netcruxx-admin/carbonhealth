@@ -570,6 +570,7 @@ export interface PatientProfileBody {
   chronicDiseases?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  emergencyRelationship?: string;
   insuranceProvider?: string;
   insuranceNumber?: string;
   aadhaarNumber?: string;
