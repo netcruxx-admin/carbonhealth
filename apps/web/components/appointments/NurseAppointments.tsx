@@ -14,6 +14,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { ActionIcon } from '@/components/ActionIcon';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { SortableTh, useAppointmentSort } from './appointmentSort';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -52,12 +53,14 @@ export function NurseAppointments({ session }: RoleViewProps) {
   const canRecordVitals = hasPermission(session, 'vitals.record');
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   const [date, setDate] = useState<string>(todayStr);
-  const table = useServerTable({ filterKey: `${status}|${date}` });
+  const { sort, toggle, token: sortToken } = useAppointmentSort();
+  const table = useServerTable({ filterKey: `${status}|${date}|${sortToken}` });
 
   const listArgs = {
     q: table.q.trim() || undefined,
     status: status === 'all' ? undefined : status,
     date: date || undefined,
+    sort: sortToken,
   };
   const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
     ...listArgs,
@@ -133,10 +136,22 @@ export function NurseAppointments({ session }: RoleViewProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Date / Time</th>
+                    <SortableTh
+                      label="Date / Time"
+                      sortKey="date"
+                      sort={sort}
+                      onSort={toggle}
+                      className="text-left py-3 px-6 font-semibold text-slate-900"
+                    />
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                    <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
+                    <SortableTh
+                      label="Status"
+                      sortKey="status"
+                      sort={sort}
+                      onSort={toggle}
+                      className="text-left py-3 px-6 font-semibold text-slate-900"
+                    />
                     <th className="text-left py-3 px-6 font-semibold text-slate-900">Vitals</th>
                     <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                   </tr>

@@ -692,9 +692,19 @@ class Vitals(Base):
     temperature = Column(Float, default=0)
     blood_pressure = Column(String, default="")
     heart_rate = Column(Integer, default=0)
+    # Still stored so historical rows keep their data, but no longer captured by
+    # the counter's vitals form.
     respiratory_rate = Column(Integer, default=0)
     weight = Column(Float, default=0)
     height = Column(Float, default=0)
+    # Derived-but-editable: BMI from height/weight, and the obstetric triad —
+    # last menstrual period, expected date of delivery, period of gestation
+    # ("28w 3d"). Auto-filled by the form from LMP / height+weight, then
+    # overridable by the recorder.
+    bmi = Column(Float, default=0)
+    lmp = Column(String, default="")  # ISO date
+    edd = Column(String, default="")  # ISO date
+    pog = Column(String, default="")
     notes = Column(Text, default="")
     created_at = Column(String, nullable=False)
 

@@ -7,12 +7,14 @@ import { useEffect } from 'react';
 import { useFormikContext } from 'formik';
 import { Plus, Trash2, Upload, FileText, X, AlertTriangle } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
-import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
+import { AddressSearch } from '@/components/form/AddressSearch';
 import { PhoneField } from '@/components/form/PhoneField';
 import { HOSPITAL_CATEGORIES } from '@/lib/hospitalCategories';
 import type { CatalogOption, HospitalDocument, OnboardingMeta } from '@/store/api';
 import {
   CATEGORY_THEMES,
+  todayISO,
+  tomorrowISO,
   type DepartmentRow,
   type LicenceRow,
   type PendingDocument,
@@ -150,7 +152,12 @@ export function RegistrationStep({ meta }: StepProps) {
             label="Issuing Authority"
             placeholder="e.g. State Health Department"
           />
-          <FormField name="registrationValidTill" label="Valid Till" type="date" />
+          <FormField
+            name="registrationValidTill"
+            label="Valid Till"
+            type="date"
+            min={tomorrowISO()}
+          />
         </FieldGrid>
       </div>
 
@@ -177,7 +184,12 @@ export function RegistrationStep({ meta }: StepProps) {
             options={asOptions(meta?.nabhStatuses)}
             placeholder="Select…"
           />
-          <FormField name="nabhValidTill" label="Accredited Till" type="date" />
+          <FormField
+            name="nabhValidTill"
+            label="Accredited Till"
+            type="date"
+            min={tomorrowISO()}
+          />
         </FieldGrid>
         <p className="text-xs text-slate-400">
           The HFR ID is what lets records link to a patient&apos;s ABHA. It can be added later.
@@ -194,8 +206,9 @@ export function ContactStep({ meta }: StepProps) {
     <div className="space-y-6">
       <div className="space-y-4">
         <SectionTitle>Address</SectionTitle>
+        <AddressSearch states={meta?.states ?? []} />
         <FieldGrid>
-          <AddressAutocomplete label="Address Line 1" placeholder="Building, street or search…" />
+          <FormField name="addressLine1" label="Address Line 1" placeholder="Building, street" />
           <FormField name="addressLine2" label="Address Line 2" placeholder="Area, landmark" />
         </FieldGrid>
         <FieldGrid cols={4}>
@@ -322,7 +335,15 @@ export function LicencesStep({ meta }: StepProps) {
   const addRow = (type = '') =>
     setFieldValue('licences', [
       ...values.licences,
-      { type, number: '', issuingAuthority: '', issuedOn: '', expiresOn: '', status: 'active' },
+      {
+        type,
+        customType: '',
+        number: '',
+        issuingAuthority: '',
+        issuedOn: '',
+        expiresOn: '',
+        status: 'active',
+      },
     ]);
 
   const removeRow = (index: number) =>
@@ -385,7 +406,7 @@ export function LicencesStep({ meta }: StepProps) {
                       onChange={(e) => update(index, 'type', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
                     >
-                      <option value="">Select type…</option>
+                      <option value="" disabled hidden>Select type…</option>
                       {types.map((t) => (
                         <option key={t.code} value={t.code}>{t.label}</option>
                       ))}
@@ -417,6 +438,27 @@ export function LicencesStep({ meta }: StepProps) {
                   </button>
                 </div>
 
+                {row.type === 'other' && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Licence name
+                    </label>
+                    <input
+                      value={row.customType ?? ''}
+                      onChange={(e) => update(index, 'customType', e.target.value)}
+                      placeholder="Name it as printed on the certificate"
+                      className={`w-full px-3 py-2 border rounded text-sm focus:outline-none ${
+                        rowTouched[index]?.customType && rowErrors[index]?.customType
+                          ? 'border-red-400'
+                          : 'border-slate-300 focus:border-cyan-500'
+                      }`}
+                    />
+                    {rowTouched[index]?.customType && rowErrors[index]?.customType && (
+                      <p className="text-red-500 text-xs mt-1">{rowErrors[index]?.customType}</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Row 2: Issuing Authority · Issued On · Expires On · Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto] gap-3 items-end">
                   <div>
@@ -433,6 +475,7 @@ export function LicencesStep({ meta }: StepProps) {
                     <input
                       type="date"
                       value={row.issuedOn}
+                      max={todayISO()}
                       onChange={(e) => update(index, 'issuedOn', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
                     />
@@ -442,6 +485,7 @@ export function LicencesStep({ meta }: StepProps) {
                     <input
                       type="date"
                       value={row.expiresOn}
+                      min={tomorrowISO()}
                       onChange={(e) => update(index, 'expiresOn', e.target.value)}
                       className="w-full px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
                     />
@@ -778,13 +822,22 @@ export function DocumentsStep({
                       onChange={(e) => onChange(doc.key, { licenceType: e.target.value })}
                       className="px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
                     >
-                      <option value="">Which licence?</option>
+                      <option value="" disabled hidden>Which licence?</option>
                       {recorded.map((l) => (
                         <option key={l.type} value={l.type}>
                           {licenceTypes.find((t) => t.code === l.type)?.label ?? l.type}
                         </option>
                       ))}
                     </select>
+                  )}
+
+                  {doc.docType === 'other' && (
+                    <input
+                      value={doc.customType ?? ''}
+                      onChange={(e) => onChange(doc.key, { customType: e.target.value })}
+                      placeholder="What is this document?"
+                      className="px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500"
+                    />
                   )}
 
                   <input
@@ -876,7 +929,7 @@ export function OperationsStep({ meta }: StepProps) {
           <NumberField name="price" label="Price" placeholder="0" hint={`per ${values.billingCycle}`} />
         </FieldGrid>
         <FieldGrid cols={4}>
-          <FormField name="trialEndsOn" label="Trial Ends" type="date" />
+          <FormField name="trialEndsOn" label="Trial Ends" type="date" min={tomorrowISO()} />
           <NumberField name="maxUsers" label="Max Users" placeholder="0" hint="0 = unlimited" />
           <NumberField name="maxDoctors" label="Max Doctors" placeholder="0" hint="0 = unlimited" />
           <NumberField name="maxBeds" label="Max Beds" placeholder="0" hint="0 = unlimited" />
@@ -939,7 +992,7 @@ export function AdminReviewStep({
               { value: 'verified', label: 'Verified — documents checked' },
             ]}
           />
-          <FormField name="goLiveDate" label="Planned Go-Live" type="date" />
+          <FormField name="goLiveDate" label="Planned Go-Live" type="date" min={tomorrowISO()} />
         </FieldGrid>
         <p className="text-xs text-slate-400">
           Separate from whether the hospital is active. A verified hospital can still be suspended,

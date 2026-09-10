@@ -110,6 +110,7 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
         docType: 'other',
         licenceType: '',
         title: '',
+        customType: '',
       })),
     ]);
 
@@ -134,13 +135,17 @@ export function OnboardHospitalWizard({ open, onClose, onCreated }: Props) {
       // and a burst of them buys nothing but a harder failure to describe.
       const failed: string[] = [];
       for (const doc of documents) {
+        // For an "other" document the typed description is the only label there
+        // is, so it becomes the title when none was given, and the note either way.
+        const other = doc.docType === 'other' ? (doc.customType ?? '').trim() : '';
         try {
           await uploadDocument({
             id: hospitalId,
             file: doc.file,
             docType: doc.docType,
             licenceType: doc.licenceType,
-            title: doc.title,
+            title: doc.title || other,
+            notes: other || undefined,
           }).unwrap();
         } catch {
           failed.push(doc.file.name);

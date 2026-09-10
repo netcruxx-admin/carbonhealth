@@ -14,7 +14,14 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { HospitalBadge } from '@/components/superadmin/HospitalBadge';
 import { ActionIcon } from '@/components/ActionIcon';
 import { FormField } from '@/components/form/FormField';
+import {
+  VitalsFormFields,
+  emptyVitals,
+  vitalsSchema,
+  vitalsToPayload,
+} from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
+import { SortableTh, useAppointmentSort } from './appointmentSort';
 import { Calendar } from '@/components/ui/calendar';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
@@ -50,21 +57,6 @@ const editSchema = Yup.object({
   doctorId: Yup.string().required('Select a doctor'),
   status: Yup.string().oneOf(['scheduled', 'completed', 'cancelled']).required(),
   reason: Yup.string().max(200, 'Too long'),
-});
-
-const numOpt = Yup.number()
-  .transform((v, o) => (o === '' ? undefined : v))
-  .typeError('Must be a number')
-  .min(0, 'Cannot be negative');
-
-const vitalsSchema = Yup.object({
-  temperature: numOpt,
-  heartRate: numOpt,
-  respiratoryRate: numOpt,
-  weight: numOpt,
-  height: numOpt,
-  bloodPressure: Yup.string().max(15, 'Too long'),
-  notes: Yup.string().max(300, 'Too long'),
 });
 
 function toDateStr(d: Date) {
@@ -131,11 +123,13 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   // Hospital, status, search and paging are all applied by the API. Patient and
   // doctor names arrive resolved on each row, so this screen no longer pulls
   // every patient and doctor on the platform to turn two ids into two names.
-  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}` });
+  const { sort, toggle, token: sortToken } = useAppointmentSort();
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${sortToken}` });
   const { data: appointmentPage, isLoading, refetch } = useGetSuperadminAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     hospitalId: selectedHospitalId || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
+    sort: sortToken,
     limit: table.limit,
     offset: table.offset,
   });
@@ -283,9 +277,20 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {showHospital && <th className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Hospital</th>}
-                  {['Date', 'Time', 'Patient', 'Doctor', 'Status', 'Mode'].map((h) => (
-                    <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
-                  ))}
+                  {['Date', 'Time', 'Patient', 'Doctor', 'Status', 'Mode'].map((h) =>
+                    h === 'Date' || h === 'Status' ? (
+                      <SortableTh
+                        key={h}
+                        label={h}
+                        sortKey={h.toLowerCase()}
+                        sort={sort}
+                        onSort={toggle}
+                        className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide"
+                      />
+                    ) : (
+                      <th key={h} className="text-left py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                    ),
+                  )}
                   <th className="text-right py-3 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
                 </tr>
               </thead>
@@ -444,7 +449,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               <button onClick={() => setAddingVitals(null)} className="text-slate-500 hover:text-slate-900"><X className="w-5 h-5" /></button>
             </div>
             <Formik
-              initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
+              initialValues={emptyVitals}
               validationSchema={vitalsSchema}
               onSubmit={async (values) => {
                 setVitalsError('');
@@ -454,13 +459,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                     appointmentId: addingVitals.id,
                     patientId: addingVitals.patientId,
                     doctorId: addingVitals.doctorId,
-                    temperature: Number(values.temperature) || 0,
-                    bloodPressure: values.bloodPressure,
-                    heartRate: Number(values.heartRate) || 0,
-                    respiratoryRate: Number(values.respiratoryRate) || 0,
-                    weight: Number(values.weight) || 0,
-                    height: Number(values.height) || 0,
-                    notes: values.notes,
+                    ...vitalsToPayload(values),
                   }).unwrap();
                   setAddingVitals(null);
                   toast.success('Vitals recorded');
@@ -470,15 +469,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               }}
             >
               <Form className="grid grid-cols-2 gap-4">
-                <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
-                <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
-                <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
-                <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
-                <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-                <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-                <div className="col-span-2">
-                  <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" />
-                </div>
+                <VitalsFormFields />
                 {vitalsError && (
                   <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
                 )}

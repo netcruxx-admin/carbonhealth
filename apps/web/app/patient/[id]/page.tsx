@@ -256,7 +256,7 @@ export default function PatientDetailPage() {
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-600" /> Latest Vitals <span className="text-xs font-normal text-slate-400">({latest.createdAt.split('T')[0]})</span></h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-              <Vital label="Temp" value={latest.temperature ? `${latest.temperature}°C` : '—'} />
+              <Vital label="Temp" value={latest.temperature ? `${latest.temperature}°F` : '—'} />
               <Vital label="Blood Pressure" value={latest.bloodPressure || '—'} />
               <Vital label="Heart Rate" value={latest.heartRate ? `${latest.heartRate} bpm` : '—'} />
               <Vital label="Resp. Rate" value={latest.respiratoryRate ? `${latest.respiratoryRate}/min` : '—'} />
@@ -305,7 +305,7 @@ export default function PatientDetailPage() {
               {model.vitals.map((v) => (
                 <tr key={v.id} className="border-b hover:bg-slate-50">
                   <td className="py-3 px-6 text-slate-600 whitespace-nowrap">{v.createdAt.split('T')[0]}</td>
-                  <td className="py-3 px-6 text-slate-600">{v.temperature ? `${v.temperature}°C` : '—'}</td>
+                  <td className="py-3 px-6 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
                   <td className="py-3 px-6 text-slate-600">{v.bloodPressure || '—'}</td>
                   <td className="py-3 px-6 text-slate-600">{v.heartRate || '—'}</td>
                   <td className="py-3 px-6 text-slate-600">{v.respiratoryRate || '—'}</td>

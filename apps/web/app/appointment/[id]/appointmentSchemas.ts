@@ -9,25 +9,12 @@ export const rescheduleSchema = Yup.object({
   time: Yup.string().required('Please select a time slot'),
 });
 
-const numOpt = Yup.number()
-  .transform((v, o) => (o === '' ? undefined : v))
-  .typeError('Must be a number')
-  .min(0, 'Cannot be negative');
-
 export const editSchema = Yup.object({
   status: Yup.string().oneOf(['scheduled', 'completed', 'cancelled']).required('Select a status'),
   reason: Yup.string().max(200, 'Too long'),
 });
 
-export const vitalsSchema = Yup.object({
-  temperature: numOpt,
-  heartRate: numOpt,
-  respiratoryRate: numOpt,
-  weight: numOpt,
-  height: numOpt,
-  bloodPressure: Yup.string().max(15, 'Too long'),
-  notes: Yup.string().max(300, 'Too long'),
-});
+// vitalsSchema moved to components/vitals/vitalsForm — the vitals form is shared.
 
 export const rxSchema = Yup.object({
   medicineName: Yup.string().trim().required('Select a medicine'),

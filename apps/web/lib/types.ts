@@ -275,9 +275,17 @@ export interface Vitals {
   temperature: number;
   bloodPressure: string;
   heartRate: number;
+  /** Still returned for historical rows; no longer captured by the vitals form. */
   respiratoryRate: number;
   weight: number;
   height: number;
+  /** Auto-filled from height/weight, editable. */
+  bmi: number;
+  /** Obstetric triad — last menstrual period / expected date of delivery /
+   *  period of gestation, e.g. "28w 3d". */
+  lmp: string;
+  edd: string;
+  pog: string;
   notes: string;
   createdAt: string;
   /** Resolved by the API, so a table need not fetch every patient to name one. */

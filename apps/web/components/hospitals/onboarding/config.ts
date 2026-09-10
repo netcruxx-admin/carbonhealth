@@ -24,6 +24,10 @@ import type {
 
 export interface LicenceRow {
   type: string;
+  /** Free-text licence name, used only when `type` is `other`. The backend
+   *  stores an arbitrary licence-type string, so this is what gets sent as the
+   *  `type` in that case. */
+  customType?: string;
   number: string;
   issuingAuthority: string;
   issuedOn: string;
@@ -41,6 +45,9 @@ export interface PendingDocument {
   docType: string;
   licenceType: string;
   title: string;
+  /** What the document is, in the user's own words — only when `docType` is
+   *  `other`. Sent as the document's note. */
+  customType?: string;
 }
 
 /** A key for one picked file.
@@ -268,6 +275,29 @@ const GSTIN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const PINCODE = /^[1-9][0-9]{5}$/;
 const PHONE = /^\d{10}$/;
 
+// Local-time YYYY-MM-DD. The date inputs are floored to this (or the day after
+// it) and the schemas re-check it, so a licence that lapsed yesterday, or a
+// "valid till" already in the past, cannot be saved. ISO date strings compare
+// correctly with `<`/`>`, so no Date parsing is needed at the call sites.
+const isoDay = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`;
+
+export const todayISO = (): string => isoDay(new Date());
+
+export const tomorrowISO = (): string => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return isoDay(d);
+};
+
+/** Optional date field that, once filled, must be strictly after today. */
+const futureDate = (message: string) =>
+  Yup.string()
+    .trim()
+    .test('future', message, (v) => !v || v > todayISO());
+
 const optionalMatch = (re: RegExp, message: string) =>
   Yup.string()
     .trim()
@@ -316,11 +346,19 @@ export const STEPS: StepDefinition[] = [
       pan: optionalMatch(PAN, 'PAN must look like ABCDE1234F'),
       gstin: optionalMatch(GSTIN, 'GSTIN must be 15 characters, e.g. 27ABCDE1234F1Z5'),
       registrationNo: Yup.string().trim().max(60, 'Too long'),
-      nabhValidTill: Yup.string().when('nabhStatus', {
-        is: (v: string) => v && v !== 'none',
-        then: (s) => s.required('Give the accreditation expiry'),
-        otherwise: (s) => s,
-      }),
+      registrationValidTill: futureDate('The registration validity date must be in the future'),
+      nabhValidTill: Yup.string()
+        .trim()
+        .when('nabhStatus', {
+          is: (v: string) => v && v !== 'none',
+          then: (s) => s.required('Give the accreditation expiry'),
+          otherwise: (s) => s,
+        })
+        .test(
+          'future',
+          'The accreditation expiry must be in the future',
+          (v) => !v || v > todayISO(),
+        ),
     }),
   },
   {
@@ -368,10 +406,32 @@ export const STEPS: StepDefinition[] = [
       licences: Yup.array().of(
         Yup.object({
           type: Yup.string().required('Pick a licence type'),
+          // "Other" only means something with a name to record it under, and
+          // that name is what gets sent as the licence type.
+          customType: Yup.string().when('type', {
+            is: 'other',
+            then: (s) => s.trim().required('Name the licence'),
+            otherwise: (s) => s,
+          }),
           // A licence row with an expiry but no number is a row that says
           // nothing, so the number is required once the row is opened at all.
           number: Yup.string().trim().required('Licence number is required'),
-          expiresOn: Yup.string().trim(),
+          // A licence cannot have been issued in the future, and one whose
+          // expiry has already passed is not a current licence.
+          issuedOn: Yup.string()
+            .trim()
+            .test(
+              'not-future',
+              'The issue date cannot be in the future',
+              (v) => !v || v <= todayISO(),
+            ),
+          expiresOn: Yup.string()
+            .trim()
+            .test(
+              'future',
+              'The expiry date must be in the future',
+              (v) => !v || v > todayISO(),
+            ),
         }),
       ),
     }),
@@ -423,6 +483,7 @@ export const STEPS: StepDefinition[] = [
     title: 'Operations & Plan',
     blurb: 'Numbering, scheduling defaults, and the commercial terms.',
     schema: Yup.object({
+      trialEndsOn: futureDate('The trial end date must be in the future'),
       appointmentSlotMinutes: Yup.number()
         .min(5, 'At least 5 minutes')
         .max(240, 'At most 240 minutes'),
@@ -444,6 +505,7 @@ export const STEPS: StepDefinition[] = [
       adminName: Yup.string().trim().required("The admin's name is required"),
       adminEmail: Yup.string().trim().email('Invalid email').required('Admin email is required'),
       adminPassword: Yup.string().min(8, 'At least 8 characters').required('Password is required'),
+      goLiveDate: futureDate('The go-live date must be in the future'),
     }),
   },
 ];
@@ -462,7 +524,12 @@ export function buildPayload(values: WizardValues): HospitalCreateBody {
   const licences: HospitalLicenceBody[] = values.licences
     .filter((l) => l.type && l.number.trim())
     .map((l) => ({
-      type: l.type,
+      // The backend stores an arbitrary licence-type string, so "Other" plus a
+      // typed name is sent as that name.
+      type:
+        l.type === 'other' && (l.customType ?? '').trim()
+          ? (l.customType ?? '').trim()
+          : l.type,
       number: trimmed(l.number),
       issuingAuthority: trimmed(l.issuingAuthority),
       issuedOn: l.issuedOn,

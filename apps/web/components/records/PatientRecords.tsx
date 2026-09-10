@@ -72,7 +72,7 @@ export function PatientRecords({ session }: RoleViewProps) {
                     <span className="text-xs text-slate-400">{fmtDate(v.createdAt)}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                    <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature}°C</p></div>
+                    <div><p className="text-slate-500">Temperature</p><p className="font-medium">{v.temperature}°F</p></div>
                     <div><p className="text-slate-500">Blood Pressure</p><p className="font-medium">{v.bloodPressure}</p></div>
                     <div><p className="text-slate-500">Heart Rate</p><p className="font-medium">{v.heartRate} bpm</p></div>
                     <div><p className="text-slate-500">Respiratory Rate</p><p className="font-medium">{v.respiratoryRate} /min</p></div>

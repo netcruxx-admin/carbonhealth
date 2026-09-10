@@ -32,6 +32,13 @@ import { CollectPaymentModal } from '@/components/payments/CollectPaymentModal';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { FormField } from '@/components/form/FormField';
+import { SortableTh, useAppointmentSort } from './appointmentSort';
+import {
+  VitalsFormFields,
+  emptyVitals,
+  vitalsSchema,
+  vitalsToPayload,
+} from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
@@ -121,24 +128,10 @@ function departmentForDoctor(doctors: Doctor[], doctorId: string) {
   return doctors.find((d) => d.id === doctorId)?.departmentId ?? '';
 }
 
-const numOpt = Yup.number()
-  .transform((v, o) => (o === '' ? undefined : v))
-  .typeError('Must be a number')
-  .min(0, 'Cannot be negative');
-
 const editSchema = Yup.object({
   doctorId: Yup.string().required('Select a doctor'),
   status: Yup.string().oneOf(['scheduled', 'completed', 'cancelled']).required('Select a status'),
   reason: Yup.string().max(200, 'Too long'),
-});
-const vitalsSchema = Yup.object({
-  temperature: numOpt,
-  heartRate: numOpt,
-  respiratoryRate: numOpt,
-  weight: numOpt,
-  height: numOpt,
-  bloodPressure: Yup.string().max(15, 'Too long'),
-  notes: Yup.string().max(300, 'Too long'),
 });
 
 const statusStyle = (status: Appointment['status']) =>
@@ -195,6 +188,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   const [date, setDate] = useState('');
   const [page, setPage] = useState(1);
+  const { sort, toggle, token: sortToken } = useAppointmentSort();
 
   const debouncedQuery = useDebounced(query);
   const listArgs = {
@@ -202,6 +196,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
     status: status === 'all' ? undefined : status,
     departmentId: deptId === 'all' ? undefined : deptId,
     date: date || undefined,
+    sort: sortToken,
   };
   const { data: page_, isLoading } = useListAppointmentsPagedQuery({
     ...listArgs,
@@ -226,7 +221,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, status, deptId, date]);
+  }, [debouncedQuery, status, deptId, date, sortToken]);
 
   const doctorName = useCallback(
     (id: string) => {
@@ -427,10 +422,22 @@ export function AdminAppointments({ session }: RoleViewProps) {
                   <thead>
                     <tr className="border-b bg-slate-50">
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Patient</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</th>
+                      <SortableTh
+                        label="Date & Time"
+                        sortKey="date"
+                        sort={sort}
+                        onSort={toggle}
+                        className="text-left py-3 px-6 font-semibold text-slate-900"
+                      />
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Department</th>
-                      <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
+                      <SortableTh
+                        label="Status"
+                        sortKey="status"
+                        sort={sort}
+                        onSort={toggle}
+                        className="text-left py-3 px-6 font-semibold text-slate-900"
+                      />
                       <th className="text-left py-3 px-6 font-semibold text-slate-900">Payment</th>
                       <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                     </tr>
@@ -667,7 +674,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </button>
             </div>
             <Formik
-              initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
+              initialValues={emptyVitals}
               validationSchema={vitalsSchema}
               onSubmit={async (values, { setSubmitting, setStatus }) => {
                 setStatus('');
@@ -676,13 +683,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     appointmentId: addingVitals.id,
                     patientId: addingVitals.patientId,
                     doctorId: addingVitals.doctorId,
-                    temperature: Number(values.temperature) || 0,
-                    bloodPressure: values.bloodPressure,
-                    heartRate: Number(values.heartRate) || 0,
-                    respiratoryRate: Number(values.respiratoryRate) || 0,
-                    weight: Number(values.weight) || 0,
-                    height: Number(values.height) || 0,
-                    notes: values.notes,
+                    ...vitalsToPayload(values),
                   }).unwrap();
                   setAddingVitals(null);
                   toast.success('Vitals recorded');
@@ -695,15 +696,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
             >
               {({ isSubmitting, status }) => (
                 <Form className="grid grid-cols-2 gap-4">
-                  <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
-                  <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
-                  <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
-                  <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
-                  <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-                  <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-                  <div className="col-span-2">
-                    <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
-                  </div>
+                  <VitalsFormFields />
                   {status && (
                     <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
                   )}

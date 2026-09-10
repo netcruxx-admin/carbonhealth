@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Formik, Form } from 'formik';
-import * as Yup from 'yup';
 import { Search, HeartPulse, X, CheckCircle } from 'lucide-react';
 import type { Appointment } from '@/lib/types';
 import { apiError } from '@/lib/apiError';
@@ -14,7 +13,12 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
-import { FormField } from '@/components/form/FormField';
+import {
+  VitalsFormFields,
+  emptyVitals,
+  vitalsSchema,
+  vitalsToPayload,
+} from '@/components/vitals/vitalsForm';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { fmtDate } from '@/lib/date';
@@ -31,21 +35,6 @@ function DateBadge({ date }: { date: string }) {
   }
   return <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">Upcoming</span>;
 }
-
-const numOpt = Yup.number()
-  .transform((v, orig) => (orig === '' ? undefined : v))
-  .typeError('Enter a number')
-  .min(0, 'Cannot be negative')
-  .notRequired();
-
-const vitalsSchema = Yup.object({
-  temperature: numOpt,
-  heartRate: numOpt,
-  respiratoryRate: numOpt,
-  weight: numOpt,
-  height: numOpt,
-  bloodPressure: Yup.string().max(15, 'Too long'),
-});
 
 interface ApptRow extends Appointment {
   patient: string;
@@ -212,7 +201,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
               </button>
             </div>
             <Formik
-              initialValues={{ temperature: '', bloodPressure: '', heartRate: '', respiratoryRate: '', weight: '', height: '', notes: '' }}
+              initialValues={emptyVitals}
               validationSchema={vitalsSchema}
               onSubmit={async (values, { setSubmitting }) => {
                 setError('');
@@ -221,13 +210,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                     appointmentId: recording.id,
                     patientId: recording.patientId,
                     doctorId: recording.doctorId,
-                    temperature: Number(values.temperature) || 0,
-                    bloodPressure: values.bloodPressure,
-                    heartRate: Number(values.heartRate) || 0,
-                    respiratoryRate: Number(values.respiratoryRate) || 0,
-                    weight: Number(values.weight) || 0,
-                    height: Number(values.height) || 0,
-                    notes: values.notes,
+                    ...vitalsToPayload(values),
                   }).unwrap();
                 } catch (err) {
                   setError(apiError(err, 'Could not record vitals'));
@@ -240,15 +223,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
               }}
             >
               <Form className="p-6 grid grid-cols-2 gap-4">
-                <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
-                <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
-                <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
-                <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
-                <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-                <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-                <div className="col-span-2">
-                  <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
-                </div>
+                <VitalsFormFields />
                 {error && (
                   <div className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                     {error}

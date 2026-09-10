@@ -1714,6 +1714,10 @@ class VitalsUpdate(CamelModel):
     respiratory_rate: Optional[int] = None
     weight: Optional[float] = None
     height: Optional[float] = None
+    bmi: Optional[float] = None
+    lmp: Optional[str] = None
+    edd: Optional[str] = None
+    pog: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -1727,6 +1731,10 @@ class VitalsCreate(CamelModel):
     respiratory_rate: int = 0
     weight: float = 0
     height: float = 0
+    bmi: float = 0
+    lmp: str = ""
+    edd: str = ""
+    pog: str = ""
     notes: str = ""
 
 
@@ -1741,6 +1749,10 @@ class VitalsOut(OutModel):
     respiratory_rate: int = 0
     weight: float = 0
     height: float = 0
+    bmi: float = 0
+    lmp: str = ""
+    edd: str = ""
+    pog: str = ""
     notes: str = ""
     created_at: str
     # Resolved server-side, for the same reason as AppointmentOut.

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
 import { superadminPost } from '@/lib/superadminFetch';
 import { useCreateUserMutation } from '@/store/api';
+import { BookAppointmentPrompt } from '@/components/patients/BookAppointmentPrompt';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, withPrefix } from '@/components/form/PhoneField';
 import {
@@ -50,8 +52,12 @@ interface Props {
 
 export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalId = '', hospitals }: Props) {
   const isSuperadmin = hospitals !== undefined;
+  const router = useRouter();
   const [hospitalId, setHospitalId] = useState(preselectedHospitalId);
   const [error, setError] = useState('');
+  // Set once the patient is saved: swaps the form for the "book an appointment?"
+  // prompt. Holds the new user's id so the booking screen can pre-select them.
+  const [justCreated, setJustCreated] = useState<{ id: string; name: string } | null>(null);
   const [createUser] = useCreateUserMutation();
 
   if (!open) return null;
@@ -59,8 +65,22 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
   const handleClose = () => {
     setError('');
     setHospitalId(preselectedHospitalId);
+    setJustCreated(null);
     onClose();
   };
+
+  if (justCreated) {
+    return (
+      <BookAppointmentPrompt
+        patientName={justCreated.name}
+        onSkip={handleClose}
+        onBook={() => {
+          router.push(`/dashboard/book?patientUser=${justCreated.id}`);
+          handleClose();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -97,12 +117,16 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
             try {
               if (isSuperadmin) {
                 await superadminPost('/users', hospitalId, body);
+                toast.success('Patient added successfully');
+                onSuccess();
+                handleClose();
               } else {
-                await createUser(body).unwrap();
+                const created = await createUser(body).unwrap();
+                toast.success('Patient added successfully');
+                onSuccess();
+                // Keep the modal open, on the "book an appointment?" step.
+                setJustCreated({ id: created.id, name: body.name });
               }
-              toast.success('Patient added successfully');
-              onSuccess();
-              handleClose();
             } catch (err) {
               setError(apiError(err, 'Failed to add patient'));
             } finally {

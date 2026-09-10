@@ -128,9 +128,15 @@ function AdminBookForm({ session }: RoleViewProps) {
   const [initiatePayment] = useInitiatePaymentMutation();
   const [verifyPayment] = useVerifyPaymentMutation();
 
-  // Prefill from query params (e.g. when arriving from a Schedule board slot)
+  // Prefill from query params (e.g. when arriving from a Schedule board slot, or
+  // straight from registering a patient). `patient` is a Patient id; the
+  // `patientUser` form — used by the post-registration prompt — is a user id
+  // resolved against the loaded list once it lands.
+  const patientUserId = searchParams.get('patientUser') ?? '';
   const prefill = {
-    patientId: '',
+    patientId:
+      searchParams.get('patient') ??
+      (patientUserId ? patients.find((p) => p.userId === patientUserId)?.id ?? '' : ''),
     doctorId: searchParams.get('doctor') ?? '',
     date: searchParams.get('date') ?? '',
     time: searchParams.get('time') ?? '',

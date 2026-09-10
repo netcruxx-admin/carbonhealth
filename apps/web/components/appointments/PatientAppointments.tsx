@@ -9,6 +9,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import { useGetPatientAppointmentsQuery } from '@/store/api';
 import type { Appointment } from '@/lib/types';
 import { PaymentBadge } from './PaymentBadge';
+import { SortableTh, compareAppointments, useAppointmentSort } from './appointmentSort';
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 import { Spinner } from '@/components/ui/spinner';
@@ -28,6 +29,7 @@ function DateBadge({ date }: { date: string }) {
 export function PatientAppointments({ session }: RoleViewProps) {
   const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
+  const { sort, toggle } = useAppointmentSort();
 
   const patientId = session?.patient?.id ?? '';
   const { data: appointments = [], isLoading } = useGetPatientAppointmentsQuery(patientId, { skip: !patientId });
@@ -39,7 +41,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+    .sort(compareAppointments(sort));
 
   return (
     <DashboardShell
@@ -93,11 +95,24 @@ export function PatientAppointments({ session }: RoleViewProps) {
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-slate-50">
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Date &amp; Time</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Doctor</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Reason</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Status</th>
-                  <th className="text-left py-3 px-6 font-semibold text-slate-900">Payment</th>
+                  {(
+                    [
+                      ['Date & Time', 'date'],
+                      ['Doctor', 'doctor'],
+                      ['Reason', 'reason'],
+                      ['Status', 'status'],
+                      ['Payment', 'payment'],
+                    ] as const
+                  ).map(([label, key]) => (
+                    <SortableTh
+                      key={key}
+                      label={label}
+                      sortKey={key}
+                      sort={sort}
+                      onSort={toggle}
+                      className="text-left py-3 px-6 font-semibold text-slate-900"
+                    />
+                  ))}
                   <th className="text-right py-3 px-6 font-semibold text-slate-900">Actions</th>
                 </tr>
               </thead>

@@ -4,9 +4,13 @@ import { Formik, Form } from 'formik';
 import { X } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import { useUpdateVitalsMutation } from '@/store/api';
-import { FormField } from '@/components/form/FormField';
 import { Modal } from './Modal';
-import { vitalsSchema } from '../appointmentSchemas';
+import {
+  VitalsFormFields,
+  vitalsSchema,
+  vitalsToForm,
+  vitalsToPayload,
+} from '@/components/vitals/vitalsForm';
 import type { Vitals } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -28,30 +32,14 @@ export function EditVitalsModal({ vitals, onClose, onSaved }: Props) {
         </button>
       </div>
       <Formik
-        initialValues={{
-          temperature: vitals.temperature ? String(vitals.temperature) : '',
-          bloodPressure: vitals.bloodPressure ?? '',
-          heartRate: vitals.heartRate ? String(vitals.heartRate) : '',
-          respiratoryRate: vitals.respiratoryRate ? String(vitals.respiratoryRate) : '',
-          weight: vitals.weight ? String(vitals.weight) : '',
-          height: vitals.height ? String(vitals.height) : '',
-          notes: vitals.notes ?? '',
-        }}
+        initialValues={vitalsToForm(vitals)}
         validationSchema={vitalsSchema}
         onSubmit={async (values, { setSubmitting, setStatus }) => {
           setStatus('');
           try {
             await updateVitals({
               id: vitals.id,
-              body: {
-                temperature: Number(values.temperature) || 0,
-                bloodPressure: values.bloodPressure,
-                heartRate: Number(values.heartRate) || 0,
-                respiratoryRate: Number(values.respiratoryRate) || 0,
-                weight: Number(values.weight) || 0,
-                height: Number(values.height) || 0,
-                notes: values.notes,
-              },
+              body: vitalsToPayload(values),
             }).unwrap();
             onSaved('Vitals updated');
           } catch (err) {
@@ -63,15 +51,7 @@ export function EditVitalsModal({ vitals, onClose, onSaved }: Props) {
       >
         {({ status, isSubmitting }) => (
           <Form className="grid grid-cols-2 gap-4">
-            <FormField name="temperature" label="Temperature (°C)" type="number" placeholder="36.8" />
-            <FormField name="bloodPressure" label="Blood Pressure" placeholder="120/80" />
-            <FormField name="heartRate" label="Heart Rate (bpm)" type="number" placeholder="78" />
-            <FormField name="respiratoryRate" label="Respiratory Rate (/min)" type="number" placeholder="16" />
-            <FormField name="weight" label="Weight (kg)" type="number" placeholder="68" />
-            <FormField name="height" label="Height (cm)" type="number" placeholder="165" />
-            <div className="col-span-2">
-              <FormField name="notes" label="Notes" as="textarea" placeholder="Any observations" rows={2} />
-            </div>
+            <VitalsFormFields />
             {status && (
               <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{status}</p>
             )}

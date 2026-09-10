@@ -17,6 +17,8 @@ from ..authz import (
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import (
+    DEFAULT_APPOINTMENT_SORT,
+    apply_appointment_sort,
     appointment_name_search,
     appointment_bills,
     appointments_with_vitals,
@@ -67,6 +69,7 @@ def list_appointments(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     department_id: Optional[str] = Query(default=None, alias="departmentId"),
     date: Optional[str] = Query(default=None),
+    sort: str = Query(default=DEFAULT_APPOINTMENT_SORT),
     limit: Optional[int] = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -94,8 +97,9 @@ def list_appointments(
         query = query.filter(models.Appointment.date == date)
     # Matches the patient's name/phone or the doctor's name.
     query = appointment_name_search(query, q)
-    # Newest first, then id to break ties — a stable order across pages.
-    query = query.order_by(models.Appointment.date.desc(), models.Appointment.id)
+    # Newest first by default; `sort` overrides. Always tie-broken by id for a
+    # stable order across pages.
+    query = apply_appointment_sort(query, sort)
     rows = paginate(query, response, limit, offset).all()
 
     # Resolve the display names in two queries for the whole page, so the client

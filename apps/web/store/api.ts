@@ -651,6 +651,10 @@ export interface VitalsCreateBody {
   respiratoryRate?: number;
   weight?: number;
   height?: number;
+  bmi?: number;
+  lmp?: string;
+  edd?: string;
+  pog?: string;
   notes?: string;
 }
 export interface RazorpaySettingsUpdate {
@@ -1205,7 +1209,7 @@ export const api = createApi({
     }),
     listAppointmentsPaged: build.query<
       Paged<Appointment>,
-      PageArgs & { status?: string; departmentId?: string; date?: string }
+      PageArgs & { status?: string; departmentId?: string; date?: string; sort?: string }
     >({
       query: (params) => ({ url: '/appointments', params: cleanParams(params) }),
       transformResponse: pageOf<Appointment>,
@@ -1303,7 +1307,7 @@ export const api = createApi({
     }),
     getSuperadminAppointmentsPaged: build.query<
       Paged<Appointment>,
-      PageArgs & { hospitalId?: string; status?: string }
+      PageArgs & { hospitalId?: string; status?: string; sort?: string }
     >({
       query: (params) => ({ url: '/superadmin/appointments', params: cleanParams(params) }),
       transformResponse: pageOf<Appointment>,
@@ -1603,7 +1607,12 @@ export const api = createApi({
     }),
     createUser: build.mutation<User, UserCreateBody>({
       query: (body) => ({ url: '/users', method: 'POST', body }),
-      invalidatesTags: [{ type: 'User', id: 'LIST' }],
+      // A patient account creates a linked Patient row, so the patient lists
+      // (and the booking screen's lookup) have to refetch too.
+      invalidatesTags: [
+        { type: 'User', id: 'LIST' },
+        { type: 'Patient', id: 'LIST' },
+      ],
     }),
     // Self-service: name/email/phone only, no role or password.
     updateOwnAccount: build.mutation<User, { name?: string; email?: string; phone?: string }>({

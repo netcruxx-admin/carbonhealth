@@ -252,6 +252,34 @@ def appointment_name_search(query, q: Optional[str]):
     )
 
 
+# Columns an appointment list may be sorted by. Display names (patient, doctor)
+# live two joins away and are resolved after the query, so they are not offered
+# here. `id` is appended to every ordering as a stable tie-break across pages.
+_APPOINTMENT_SORTABLE = {
+    "date": models.Appointment.date,
+    "status": models.Appointment.status,
+    "created": models.Appointment.created_at,
+}
+DEFAULT_APPOINTMENT_SORT = "-date"
+
+
+def apply_appointment_sort(query, sort: Optional[str]):
+    """Order an appointment query by a `sort` token like `date` or `-status`.
+
+    A leading `-` means descending. Anything unrecognised falls back to newest
+    first — what the list showed before sorting was a parameter — so the default
+    and every bad value behave identically.
+    """
+    token = (sort or DEFAULT_APPOINTMENT_SORT).strip()
+    descending = token.startswith("-")
+    key = token[1:] if descending else token
+    column = _APPOINTMENT_SORTABLE.get(key)
+    if column is None:
+        column, descending = models.Appointment.date, True
+    column = column.desc() if descending else column.asc()
+    return query.order_by(column, models.Appointment.id)
+
+
 def attach_visit_stats(db: Session, items: Sequence) -> None:
     """Fill visit_count / last_visit / next_visit on already-serialized patients.
 

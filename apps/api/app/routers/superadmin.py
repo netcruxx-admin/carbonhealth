@@ -9,7 +9,9 @@ from .. import models, schemas
 from ..authz import require_permission
 from ..database import get_db
 from ..utils import (
+    DEFAULT_APPOINTMENT_SORT,
     ListQuery,
+    apply_appointment_sort,
     appointment_name_search,
     attach_users,
     attach_visit_stats,
@@ -113,6 +115,7 @@ def all_appointments(
     response: Response,
     hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),
     status_filter: Optional[str] = Query(default=None, alias="status"),
+    sort: str = Query(default=DEFAULT_APPOINTMENT_SORT),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
     _: str = Depends(require_permission("platform.read")),
@@ -125,7 +128,7 @@ def all_appointments(
     # Same search as the tenant list: patient name/phone or doctor name, which
     # is what the platform table shows and therefore what a superadmin types.
     query = appointment_name_search(query, params.q)
-    query = query.order_by(models.Appointment.date.desc(), models.Appointment.id)
+    query = apply_appointment_sort(query, sort)
     rows = paginate(query, response, params.limit, params.offset).all()
     patients = patient_display(db, (r.patient_id for r in rows))
     doctors = doctor_display(db, (r.doctor_id for r in rows))

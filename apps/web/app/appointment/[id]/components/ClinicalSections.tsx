@@ -200,7 +200,7 @@ export function ClinicalSections({
           <Table head={['Temp', 'Blood Pressure', 'Heart Rate', 'Resp. Rate', 'Weight', 'Height', 'Notes', ...(canManage ? ['Actions'] : [])]}>
             {vitals.map((v) => (
               <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50">
-                <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°C` : '—'}</td>
+                <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
                 <td className="py-3 px-4 text-slate-600">{v.bloodPressure || '—'}</td>
                 <td className="py-3 px-4 text-slate-600">{v.heartRate ? `${v.heartRate} bpm` : '—'}</td>
                 <td className="py-3 px-4 text-slate-600">{v.respiratoryRate ? `${v.respiratoryRate}/min` : '—'}</td>

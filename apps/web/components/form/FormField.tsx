@@ -71,7 +71,13 @@ export function FormField({
   } else if (as === 'select') {
     control = (
       <select {...field} onChange={onChange} className={base}>
-        <option value="">{placeholder ?? 'Select…'}</option>
+        {/* A real placeholder: it shows while the field is empty, but
+            `disabled` + `hidden` keep it out of the list so it can never be
+            picked back as a value. A select that needs an explicit
+            "None"/"Any" choice should carry it in `options`. */}
+        <option value="" disabled hidden>
+          {placeholder ?? 'Select…'}
+        </option>
         {options?.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
