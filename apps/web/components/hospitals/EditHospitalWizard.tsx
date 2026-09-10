@@ -57,7 +57,6 @@ import {
 } from './onboarding/StepPanels';
 import { ColourField, FieldGrid, ReviewRow, SectionTitle } from './onboarding/fields';
 import { FormField } from '@/components/form/FormField';
-import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
 import { Spinner } from '@/components/ui/spinner';
 import { toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 

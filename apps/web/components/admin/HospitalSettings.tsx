@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 import { DashboardShell } from '@/components/DashboardShell';
 import { FormField } from '@/components/form/FormField';
-import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
+import { AddressSearch } from '@/components/form/AddressSearch';
 import { LetterheadCropModal } from '@/components/admin/LetterheadCropModal';
 import { LetterheadMarginPicker } from '@/components/admin/LetterheadMarginPicker';
 import { FormattedDate } from '@/components/ui/FormattedDate';
@@ -674,14 +674,17 @@ export function HospitalSettings({ session }: RoleViewProps) {
                   </Section>
 
                   <Section icon={MapPin} title="Address">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <AddressAutocomplete label="Address line 1" placeholder="Building, street or search…" />
-                      <FormField name="addressLine2" label="Address line 2" />
-                      <FormField name="city" label="City" />
-                      <FormField name="district" label="District" />
-                      <FormField name="state" label="State" />
-                      <FormField name="pincode" label="PIN code" />
-                      <FormField name="country" label="Country" />
+                    <div className="space-y-4">
+                      <AddressSearch />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField name="addressLine1" label="Address line 1" placeholder="Building, street" />
+                        <FormField name="addressLine2" label="Address line 2" />
+                        <FormField name="city" label="City" />
+                        <FormField name="district" label="District" />
+                        <FormField name="state" label="State" />
+                        <FormField name="pincode" label="PIN code" />
+                        <FormField name="country" label="Country" />
+                      </div>
                     </div>
                   </Section>
 

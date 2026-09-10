@@ -3,10 +3,10 @@
 /**
  * AddressSearch
  *
- * A standalone address lookup for the hospital onboarding form. Unlike the older
- * AddressAutocomplete it is NOT bound to `addressLine1` — it is its own search
- * box plus a "Detect location" button, and on a pick (or a detected position) it
- * writes the sibling Formik fields:
+ * The shared address lookup for every address form (hospital onboarding, edit
+ * hospital, hospital settings, patient profile). It is NOT bound to
+ * `addressLine1` — it is its own search box plus a "Detect location" button, and
+ * on a pick (or a detected position) it writes the sibling Formik fields:
  *
  *   addressLine1, addressLine2, city, district, state, pincode, country
  *
@@ -60,6 +60,9 @@ const EMPTY: ParsedAddress = {
 
 let mapsPromise: Promise<void> | null = null;
 
+// Global the Maps bootstrap calls back into once the API core is ready.
+const READY_CALLBACK = '__carbonGmapsReady';
+
 function loadMaps(apiKey: string): Promise<void> {
   if (mapsPromise) return mapsPromise;
   mapsPromise = new Promise<void>((resolve, reject) => {
@@ -67,27 +70,47 @@ function loadMaps(apiKey: string): Promise<void> {
       reject(new Error('Maps can only load in the browser'));
       return;
     }
-    if (window.google?.maps) {
+    // `importLibrary` is what every caller below actually needs. It is attached
+    // by the async bootstrap *after* the script tag's `load` event fires, so
+    // resolving on `load` (or on a bare `window.google.maps`) races the first
+    // importLibrary() call and makes the first search/detect throw. Gate on the
+    // function itself, and let the `callback=` param below tell us when it lands.
+    if (typeof window.google?.maps?.importLibrary === 'function') {
       resolve();
       return;
     }
+
+    (window as unknown as Record<string, () => void>)[READY_CALLBACK] = () => {
+      try {
+        delete (window as unknown as Record<string, unknown>)[READY_CALLBACK];
+      } catch {
+        (window as unknown as Record<string, unknown>)[READY_CALLBACK] = undefined;
+      }
+      resolve();
+    };
+
+    const fail = (script?: HTMLScriptElement) => {
+      script?.remove();
+      mapsPromise = null;
+      reject(new Error('Google Maps failed to load'));
+    };
+
     const existing = document.getElementById('gmaps-js') as HTMLScriptElement | null;
     if (existing) {
-      existing.addEventListener('load', () => resolve());
-      existing.addEventListener('error', () => reject(new Error('Google Maps failed to load')));
+      // A tag is already in flight (added by an earlier mount). The shared
+      // `callback=` above still fires for it; only wire up the error path.
+      existing.addEventListener('error', () => fail(existing));
       return;
     }
+
     const script = document.createElement('script');
     script.id = 'gmaps-js';
     script.async = true;
     // No `libraries=` — each library is pulled on demand via importLibrary(),
-    // which is the sanctioned path for the current Places API.
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async`;
-    script.onload = () => resolve();
-    script.onerror = () => {
-      mapsPromise = null;
-      reject(new Error('Google Maps failed to load'));
-    };
+    // which is the sanctioned path for the current Places API. `callback=`
+    // resolves this promise only once the API core (and importLibrary) is ready.
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${READY_CALLBACK}`;
+    script.onerror = () => fail(script);
     document.head.appendChild(script);
   });
   return mapsPromise;

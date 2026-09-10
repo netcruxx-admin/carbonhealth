@@ -4,7 +4,7 @@ import * as Yup from 'yup';
 import { Calendar, Droplet, Fingerprint } from 'lucide-react';
 import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
-import { AddressAutocomplete } from '@/components/form/AddressAutocomplete';
+import { AddressSearch } from '@/components/form/AddressSearch';
 import { aadhaarDigits, aadhaarError, formatAadhaar } from '@/lib/aadhaar';
 import type { Patient } from '@/lib/types';
 
@@ -279,17 +279,22 @@ export function PatientIdentityFields({ requireDateOfBirth = false }: { requireD
 }
 
 /** Where the patient lives. Field names match the hospital address forms, so
- *  the Google Places autocomplete fills them the same way. */
+ *  the shared AddressSearch fills them the same way. The search box writes the
+ *  fields below; each stays editable for hand corrections and for when no
+ *  Google Maps key is configured (AddressSearch renders nothing then). */
 export function PatientAddressFields() {
   return (
     <Section title="Address">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <AddressAutocomplete label="Address Line 1" placeholder="House, street or search…" />
-        <FormField name="addressLine2" label="Address Line 2" placeholder="Area, landmark" />
-        <FormField name="city" label="City / Town" placeholder="e.g. Pune" />
-        <FormField name="district" label="District" placeholder="e.g. Pune" />
-        <FormField name="state" label="State" placeholder="e.g. Maharashtra" />
-        <FormField name="pincode" label="PIN Code" placeholder="411001" />
+      <div className="space-y-4">
+        <AddressSearch />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField name="addressLine1" label="Address Line 1" placeholder="House, street" />
+          <FormField name="addressLine2" label="Address Line 2" placeholder="Area, landmark" />
+          <FormField name="city" label="City / Town" placeholder="e.g. Pune" />
+          <FormField name="district" label="District" placeholder="e.g. Pune" />
+          <FormField name="state" label="State" placeholder="e.g. Maharashtra" />
+          <FormField name="pincode" label="PIN Code" placeholder="411001" />
+        </div>
       </div>
     </Section>
   );
