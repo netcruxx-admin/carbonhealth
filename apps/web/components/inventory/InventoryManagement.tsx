@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { Package, X, AlertTriangle, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { InventoryMovementType, Medicine } from '@/lib/types';
-import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import type { RoleViewProps } from '@/components/RoleView';
@@ -19,8 +18,6 @@ import {
 } from '@/store/api';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
-
-type ActiveTab = 'stock' | 'movements';
 
 const MOVEMENT_BADGE: Record<InventoryMovementType, string> = {
   restock: 'bg-green-100 text-green-700',
@@ -47,11 +44,15 @@ interface AdjustForm {
   notes: string;
 }
 
-export function InventoryManagement({ session }: RoleViewProps) {
+/**
+ * Medicine stock levels and movement history. Rendered as the "Stock &
+ * Movements" sub-tab of the Medicines section on the combined Inventory page
+ * (see InventoryHub); it no longer owns a route or a DashboardShell of its own.
+ */
+export function InventoryStockPanel({ session }: RoleViewProps) {
   // A hospital admin holds inventory.read so they can see what is on the
   // shelf; restocking and write-offs stay with the pharmacist.
   const canManage = hasPermission(session, 'inventory.manage');
-  const [activeTab, setActiveTab] = useState<ActiveTab>('stock');
   const [viewing, setViewing] = useState<Medicine | null>(null);
   const [restockMed, setRestockMed] = useState<Medicine | null>(null);
   const [adjustMed, setAdjustMed] = useState<Medicine | null>(null);
@@ -128,12 +129,7 @@ export function InventoryManagement({ session }: RoleViewProps) {
   };
 
   return (
-    <DashboardShell
-      role={session.user.role}
-      userName={session.user.name}
-      title="Inventory"
-      subtitle="Medicine stock levels and movement history"
-    >
+    <>
       <div className="space-y-6">
         {/* Low stock alert */}
         {lowStock.length > 0 && (
@@ -150,159 +146,135 @@ export function InventoryManagement({ session }: RoleViewProps) {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-white rounded-lg shadow px-1 py-1 w-fit">
-          <button
-            onClick={() => setActiveTab('stock')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-              activeTab === 'stock' ? 'bg-cyan-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Stock Levels
-          </button>
-          <button
-            onClick={() => setActiveTab('movements')}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-              activeTab === 'movements' ? 'bg-cyan-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Movement History
-          </button>
+        {/* Stock Levels */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b">
+            <h3 className="font-semibold text-slate-900">Stock Levels ({medicines.length})</h3>
+          </div>
+          {loadingMedicines ? (
+            <Spinner variant="block" />
+          ) : medicines.length === 0 ? (
+            <div className="text-center py-16">
+              <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-600">No medicines in catalog yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-slate-50">
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Name</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Form</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Strength</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Category</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Stock</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Reorder</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Location</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Unit</th>
+                    <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {medicines.map((med) => (
+                    <tr key={med.id} className="border-b hover:bg-slate-50">
+                      <td className="py-3 px-4 font-medium text-slate-900">{med.name}</td>
+                      <td className="py-3 px-4 text-slate-600">{med.form || '—'}</td>
+                      <td className="py-3 px-4 text-slate-600">{med.strength || '—'}</td>
+                      <td className="py-3 px-4 text-slate-600">{med.category || '—'}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${stockBadgeClass(med)}`}>
+                          {med.stock}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{med.reorderLevel ?? 10}</td>
+                      <td className="py-3 px-4 text-slate-600">{med.location || '—'}</td>
+                      <td className="py-3 px-4 text-slate-600">{med.unit || '—'}</td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <ActionIcon icon={Eye} label="View" onClick={() => setViewing(med)} />
+                          {canManage && (
+                            <>
+                              <button
+                                onClick={() => openRestock(med)}
+                                className="px-2 py-1 text-xs font-medium bg-green-50 text-green-700 rounded hover:bg-green-100 transition flex items-center gap-1"
+                              >
+                                <TrendingUp className="w-3 h-3" /> Restock
+                              </button>
+                              <button
+                                onClick={() => openAdjust(med)}
+                                className="px-2 py-1 text-xs font-medium bg-slate-50 text-slate-700 rounded hover:bg-slate-100 transition flex items-center gap-1"
+                              >
+                                <TrendingDown className="w-3 h-3" /> Adjust
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
-        {/* Stock Levels */}
-        {activeTab === 'stock' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b">
-              <h3 className="font-semibold text-slate-900">Stock Levels ({medicines.length})</h3>
-            </div>
-            {loadingMedicines ? (
-              <Spinner variant="block" />
-            ) : medicines.length === 0 ? (
-              <div className="text-center py-16">
-                <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-600">No medicines in catalog yet.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Name</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Form</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Strength</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Category</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Stock</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Reorder</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Location</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Unit</th>
-                      <th className="text-right py-3 px-4 font-semibold text-slate-900">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {medicines.map((med) => (
-                      <tr key={med.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-4 font-medium text-slate-900">{med.name}</td>
-                        <td className="py-3 px-4 text-slate-600">{med.form || '—'}</td>
-                        <td className="py-3 px-4 text-slate-600">{med.strength || '—'}</td>
-                        <td className="py-3 px-4 text-slate-600">{med.category || '—'}</td>
-                        <td className="py-3 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${stockBadgeClass(med)}`}>
-                            {med.stock}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600">{med.reorderLevel ?? 10}</td>
-                        <td className="py-3 px-4 text-slate-600">{med.location || '—'}</td>
-                        <td className="py-3 px-4 text-slate-600">{med.unit || '—'}</td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <ActionIcon icon={Eye} label="View" onClick={() => setViewing(med)} />
-                            {canManage && (
-                              <>
-                                <button
-                                  onClick={() => openRestock(med)}
-                                  className="px-2 py-1 text-xs font-medium bg-green-50 text-green-700 rounded hover:bg-green-100 transition flex items-center gap-1"
-                                >
-                                  <TrendingUp className="w-3 h-3" /> Restock
-                                </button>
-                                <button
-                                  onClick={() => openAdjust(med)}
-                                  className="px-2 py-1 text-xs font-medium bg-slate-50 text-slate-700 rounded hover:bg-slate-100 transition flex items-center gap-1"
-                                >
-                                  <TrendingDown className="w-3 h-3" /> Adjust
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Movement History */}
-        {activeTab === 'movements' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b">
-              <h3 className="font-semibold text-slate-900">Movement History ({movements.length})</h3>
-            </div>
-            {loadingMovements ? (
-              <Spinner variant="block" />
-            ) : movements.length === 0 ? (
-              <div className="text-center py-16">
-                <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-600">No movements recorded yet.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b bg-slate-50">
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Type</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Qty</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Lot No.</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Performed By</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Date</th>
-                      <th className="text-left py-3 px-4 font-semibold text-slate-900">Notes</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {movements.map((m) => (
-                      <tr key={m.id} className="border-b hover:bg-slate-50">
-                        <td className="py-3 px-4 font-medium text-slate-900">
-                          {m.medicineName ?? m.medicineId}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${MOVEMENT_BADGE[m.movementType]}`}>
-                            {m.movementType}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={m.quantity >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
-                            {m.quantity >= 0 ? '+' : ''}{m.quantity}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600">{m.lotNumber || '—'}</td>
-                        <td className="py-3 px-4 text-slate-600">
-                          {m.performedByName ?? m.performedBy}
-                        </td>
-                        <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
-                          {fmtDate(m.createdAt)}
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{m.notes || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b">
+            <h3 className="font-semibold text-slate-900">Movement History ({movements.length})</h3>
           </div>
-        )}
+          {loadingMovements ? (
+            <Spinner variant="block" />
+          ) : movements.length === 0 ? (
+            <div className="text-center py-16">
+              <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <p className="text-slate-600">No movements recorded yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-slate-50">
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Medicine</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Type</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Qty</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Lot No.</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Performed By</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-slate-900">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => (
+                    <tr key={m.id} className="border-b hover:bg-slate-50">
+                      <td className="py-3 px-4 font-medium text-slate-900">
+                        {m.medicineName ?? m.medicineId}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${MOVEMENT_BADGE[m.movementType]}`}>
+                          {m.movementType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={m.quantity >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
+                          {m.quantity >= 0 ? '+' : ''}{m.quantity}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{m.lotNumber || '—'}</td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {m.performedByName ?? m.performedBy}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
+                        {fmtDate(m.createdAt)}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{m.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Restock Modal */}
@@ -461,6 +433,6 @@ export function InventoryManagement({ session }: RoleViewProps) {
           { label: 'Storage location', value: viewing?.location },
         ]}
       />
-    </DashboardShell>
+    </>
   );
 }

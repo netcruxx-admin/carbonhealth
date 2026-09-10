@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import type { Injectable, InjectionMovementType } from '@/lib/types';
 import { INJECTION_ROUTES } from '@/lib/types';
-import { DashboardShell } from '@/components/DashboardShell';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
 import { FormField } from '@/components/form/FormField';
@@ -70,7 +69,12 @@ function stockBadge(item: Injectable): string {
   return 'bg-green-100 text-green-700';
 }
 
-export function InjectableCatalog({ session }: RoleViewProps) {
+/**
+ * Injectable catalogue plus stock & movements. Rendered as the "Injectables"
+ * tab of the combined Inventory page (see InventoryHub); it no longer owns a
+ * route or a DashboardShell of its own.
+ */
+export function InjectableCatalogPanel({ session }: RoleViewProps) {
   const canManage = hasPermission(session, 'injectables.manage');
   // Deletion is a platform capability — hospital staff create and edit only.
   const canDelete = hasPermission(session, 'injectables.delete');
@@ -174,12 +178,7 @@ export function InjectableCatalog({ session }: RoleViewProps) {
   };
 
   return (
-    <DashboardShell
-      role={session.user.role}
-      userName={session.user.name}
-      title="Injectables"
-      subtitle="Shot catalogue and stock"
-    >
+    <>
       <div className="space-y-6">
         {lowStock.length > 0 && (
           <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
@@ -634,6 +633,6 @@ export function InjectableCatalog({ session }: RoleViewProps) {
           { label: 'Storage location', value: viewing?.location },
         ]}
       />
-    </DashboardShell>
+    </>
   );
 }
