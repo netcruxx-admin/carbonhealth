@@ -498,6 +498,12 @@ class Patient(Base):
     date_of_birth = Column(String, default="")
     gender = Column(String, default="")
     blood_group = Column(String, default="")
+    # The "W/O … / D/O … / B/O …" line that identifies a patient by a relative,
+    # the common convention on Indian records. relation_type is one of
+    # "wife_of" | "daughter_of" | "baby_of" (or "" when not given);
+    # relation_name is that relative's name.
+    relation_type = Column(String, default="")
+    relation_name = Column(String, default="")
     allergies = Column(Text, default="")
     chronic_diseases = Column(Text, default="")
     emergency_contact = Column(String, default="")
@@ -638,7 +644,11 @@ class MedicalRecord(Base):
     appointment_id = Column(String, index=True, nullable=False)
     doctor_id = Column(String, nullable=False)
     diagnosis = Column(Text, default="")
-    prescription = Column(Text, default="")
+    # Free-text clinical advice. `treatment_advice` was previously named
+    # `prescription` — a misnomer, since actual drug orders live in the
+    # Prescription table — and is renamed here without losing its data.
+    treatment_advice = Column(Text, default="")
+    follow_up_advice = Column(Text, default="")
     lab_reports = Column(JSON, default=list)
     created_at = Column(String, nullable=False)
 

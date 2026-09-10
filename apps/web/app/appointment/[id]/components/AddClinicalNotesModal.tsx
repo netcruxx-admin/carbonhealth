@@ -20,9 +20,10 @@ interface Props {
 
 const schema = Yup.object({
   diagnosis: Yup.string().trim(),
-  prescription: Yup.string().trim(),
-}).test('at-least-one', 'Enter a diagnosis or prescription notes', (values) =>
-  !!(values.diagnosis?.trim() || values.prescription?.trim()),
+  treatmentAdvice: Yup.string().trim(),
+  followUpAdvice: Yup.string().trim(),
+}).test('at-least-one', 'Fill in at least one of these', (values) =>
+  !!(values.diagnosis?.trim() || values.treatmentAdvice?.trim() || values.followUpAdvice?.trim()),
 );
 
 export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onClose, onSaved }: Props) {
@@ -38,7 +39,7 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
         </button>
       </div>
       <Formik
-        initialValues={{ diagnosis: '', prescription: '' }}
+        initialValues={{ diagnosis: '', treatmentAdvice: '', followUpAdvice: '' }}
         validationSchema={schema}
         onSubmit={async (values, { setSubmitting }) => {
           setError('');
@@ -48,7 +49,8 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
               patientId,
               doctorId,
               diagnosis: values.diagnosis.trim() || undefined,
-              prescription: values.prescription.trim() || undefined,
+              treatmentAdvice: values.treatmentAdvice.trim() || undefined,
+              followUpAdvice: values.followUpAdvice.trim() || undefined,
             }).unwrap();
             onSaved('Clinical notes saved');
           } catch (err) {
@@ -69,11 +71,19 @@ export function AddClinicalNotesModal({ appointmentId, patientId, doctorId, onCl
               dictation
             />
             <FormField
-              name="prescription"
-              label="Prescription Notes"
+              name="treatmentAdvice"
+              label="Treatment Advice"
               as="textarea"
               rows={3}
-              placeholder="e.g. Tab Azithromycin 500 mg OD × 3 days, plenty of fluids"
+              placeholder="e.g. Warm saline gargles, paracetamol for fever, rest and fluids"
+              dictation
+            />
+            <FormField
+              name="followUpAdvice"
+              label="Follow-up Advice"
+              as="textarea"
+              rows={3}
+              placeholder="e.g. Review in 5 days, or sooner if fever crosses 102°F or breathing difficulty"
               dictation
             />
             {error && (

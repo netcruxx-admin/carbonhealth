@@ -35,11 +35,35 @@ export const BLOOD_GROUP_OPTIONS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 
   label: b,
 }));
 
+/** The "identified by a relative" line, the common convention on Indian
+ *  records: W/O (wife of), D/O (daughter of), B/O (baby of). */
+export const RELATION_OPTIONS = [
+  { value: 'wife_of', label: 'Wife of' },
+  { value: 'daughter_of', label: 'Daughter of' },
+  { value: 'baby_of', label: 'Baby of' },
+];
+
+/** relation_type → the short label shown against the name. */
+export const RELATION_SHORT: Record<string, string> = {
+  wife_of: 'W/O',
+  daughter_of: 'D/O',
+  baby_of: 'B/O',
+};
+
+/** "W/O Ramesh Kumar", or '' when the relation line was not filled in. */
+export function formatRelationLine(type?: string | null, name?: string | null): string {
+  const label = RELATION_SHORT[(type ?? '').trim()];
+  const who = (name ?? '').trim();
+  return label && who ? `${label} ${who}` : '';
+}
+
 /** The shape every patient form holds, whatever else it adds around it. */
 export interface PatientProfileValues {
   dateOfBirth: string;
   gender: string;
   bloodGroup: string;
+  relationType: string;
+  relationName: string;
   aadhaarNumber: string;
   addressLine1: string;
   addressLine2: string;
@@ -61,6 +85,8 @@ export const emptyPatientProfile: PatientProfileValues = {
   dateOfBirth: '',
   gender: '',
   bloodGroup: '',
+  relationType: '',
+  relationName: '',
   aadhaarNumber: '',
   addressLine1: '',
   addressLine2: '',
@@ -84,6 +110,8 @@ export function patientProfileValues(patient: Patient): PatientProfileValues {
     dateOfBirth: patient.dateOfBirth ?? '',
     gender: (patient.gender ?? '').toLowerCase(),
     bloodGroup: patient.bloodGroup ?? '',
+    relationType: patient.relationType ?? '',
+    relationName: patient.relationName ?? '',
     aadhaarNumber: formatAadhaar(patient.aadhaarNumber ?? ''),
     addressLine1: patient.addressLine1 ?? '',
     addressLine2: patient.addressLine2 ?? '',
@@ -113,6 +141,8 @@ export function patientProfileValues(patient: Patient): PatientProfileValues {
 export const patientProfileSchemaFields = {
   gender: Yup.string(),
   bloodGroup: Yup.string().max(10, 'Too long'),
+  relationType: Yup.string().oneOf(['', 'wife_of', 'daughter_of', 'baby_of'], 'Pick one'),
+  relationName: Yup.string().max(100, 'Too long'),
   // Checked with the same Verhoeff digit the server checks, so a mistyped
   // number is caught at the field rather than after a round trip.
   aadhaarNumber: Yup.string().test('aadhaar', function (value) {
@@ -147,6 +177,8 @@ export function patientProfilePayload(values: PatientProfileValues) {
     dateOfBirth: values.dateOfBirth,
     gender: values.gender,
     bloodGroup: values.bloodGroup,
+    relationType: values.relationType,
+    relationName: values.relationName.trim(),
     aadhaarNumber: aadhaarDigits(values.aadhaarNumber),
     addressLine1: values.addressLine1.trim(),
     addressLine2: values.addressLine2.trim(),
@@ -202,6 +234,18 @@ export function PatientIdentityFields({ requireDateOfBirth = false }: { requireD
   return (
     <Section title="Personal">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField
+          name="relationType"
+          label="Relation"
+          as="select"
+          placeholder="Wife of / Daughter of / Baby of…"
+          options={RELATION_OPTIONS}
+        />
+        <FormField
+          name="relationName"
+          label="Relative's Name"
+          placeholder="e.g. Ramesh Kumar"
+        />
         <FormField
           name="dateOfBirth"
           label="Date of Birth"

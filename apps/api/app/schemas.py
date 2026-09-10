@@ -929,6 +929,8 @@ PATIENT_PROFILE_COLUMNS = (
     "gender",
     "blood_group",
     "date_of_birth",
+    "relation_type",
+    "relation_name",
     "allergies",
     "chronic_diseases",
     "emergency_contact",
@@ -962,6 +964,11 @@ class PatientProfileFields(CamelModel):
     gender: Optional[str] = None
     blood_group: Optional[str] = None
     date_of_birth: Optional[str] = None
+    #: The "W/O / D/O / B/O" identity line. relation_type is one of
+    #: "wife_of" | "daughter_of" | "baby_of" (or "" / None); relation_name is
+    #: the relative's name.
+    relation_type: Optional[str] = None
+    relation_name: Optional[str] = None
     allergies: Optional[str] = None
     chronic_diseases: Optional[str] = None
     emergency_contact: Optional[str] = None
@@ -986,6 +993,17 @@ class PatientProfileFields(CamelModel):
         if isinstance(v, str):
             return v.lower()
         return v
+
+    @field_validator("relation_type", mode="before")
+    @classmethod
+    def _normalise_relation_type(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
+        cleaned = v.strip().lower()
+        allowed = {"wife_of", "daughter_of", "baby_of"}
+        if cleaned and cleaned not in allowed:
+            raise ValueError("relation_type must be wife_of, daughter_of or baby_of")
+        return cleaned
 
     @field_validator("aadhaar_number", mode="before")
     @classmethod
@@ -1132,6 +1150,8 @@ class PatientOut(OutModel):
     date_of_birth: str = ""
     gender: str = ""
     blood_group: str = ""
+    relation_type: str = ""
+    relation_name: str = ""
     allergies: str = ""
     chronic_diseases: str = ""
     emergency_contact: str = ""
@@ -1356,7 +1376,8 @@ class MedicalRecordCreate(CamelModel):
     appointment_id: str
     doctor_id: str
     diagnosis: str = ""
-    prescription: str = ""
+    treatment_advice: str = ""
+    follow_up_advice: str = ""
     lab_reports: List[str] = []
 
 
@@ -1366,7 +1387,8 @@ class MedicalRecordOut(OutModel):
     appointment_id: str
     doctor_id: str
     diagnosis: str = ""
-    prescription: str = ""
+    treatment_advice: str = ""
+    follow_up_advice: str = ""
     lab_reports: List[str] = []
     created_at: str
 

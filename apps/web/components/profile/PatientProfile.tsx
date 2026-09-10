@@ -18,8 +18,10 @@ import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import {
   PatientAddressFields,
+  RELATION_OPTIONS,
   emptyPatientProfile,
   formatPatientAddress,
+  formatRelationLine,
   patientProfilePayload,
   patientProfileSchemaFields,
   patientProfileValues,
@@ -33,6 +35,8 @@ interface FormValues {
   email: string;
   dateOfBirth: string;
   gender: string;
+  relationType: string;
+  relationName: string;
   phone: string;
   emergencyContact: string;
   emergencyPhone: string;
@@ -65,7 +69,7 @@ const schema = Yup.object({
 
 // Fields that belong to each step — used to scope Next-button validation.
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
-  1: ['name', 'email', 'dateOfBirth', 'gender', 'aadhaarNumber'],
+  1: ['name', 'email', 'dateOfBirth', 'gender', 'relationType', 'relationName', 'aadhaarNumber'],
   2: ['phone', 'emergencyContact', 'emergencyPhone', 'emergencyRelationship', 'addressLine1', 'city', 'pincode'],
   3: ['bloodGroup', 'allergies', 'chronicDiseases'],
   4: ['insuranceProvider', 'insuranceNumber'],
@@ -147,6 +151,16 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
             placeholder="Select Gender"
             options={genderOptions}
           />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              name="relationType"
+              label="Relation"
+              as="select"
+              placeholder="Wife of / Daughter of / Baby of…"
+              options={RELATION_OPTIONS}
+            />
+            <FormField name="relationName" label="Relative's Name" placeholder="e.g. Ramesh Kumar" />
+          </div>
           <FormField name="aadhaarNumber" label="Aadhaar Number" placeholder="1234 5678 9012" />
           <p className="text-xs text-slate-400">
             Optional. It is used only so the hospital recognises you as the same person on a
@@ -336,6 +350,12 @@ export function PatientProfile({ session }: RoleViewProps) {
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Gender</dt>
                     <dd className="text-slate-800 font-medium capitalize">{patient?.gender || 'None'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Relation</dt>
+                    <dd className="text-slate-800 font-medium">
+                      {formatRelationLine(patient?.relationType, patient?.relationName) || 'None'}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Aadhaar</dt>

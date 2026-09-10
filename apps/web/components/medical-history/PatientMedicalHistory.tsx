@@ -149,10 +149,16 @@ export function PatientMedicalHistory({ session }: RoleViewProps) {
                   <p className="text-slate-800 text-sm">{record.diagnosis}</p>
                 </div>
               )}
-              {record.prescription?.trim() && (
+              {record.treatmentAdvice?.trim() && (
                 <div className="mb-2">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Prescription Notes</p>
-                  <p className="text-slate-700 text-sm whitespace-pre-line">{record.prescription}</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Treatment Advice</p>
+                  <p className="text-slate-700 text-sm whitespace-pre-line">{record.treatmentAdvice}</p>
+                </div>
+              )}
+              {record.followUpAdvice?.trim() && (
+                <div className="mb-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5">Follow-up Advice</p>
+                  <p className="text-slate-700 text-sm whitespace-pre-line">{record.followUpAdvice}</p>
                 </div>
               )}
               {record.labReports && record.labReports.length > 0 && (

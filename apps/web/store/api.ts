@@ -10,6 +10,9 @@ import type {
   Doctor,
   GrowthMeasurement,
   Immunization,
+  Injectable,
+  InjectionOrder,
+  InjectionStockMovement,
   InventoryMovement,
   LabTest,
   MedicalRecord,
@@ -566,6 +569,8 @@ export interface PatientProfileBody {
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
+  relationType?: string;
+  relationName?: string;
   allergies?: string;
   chronicDiseases?: string;
   emergencyContact?: string;
@@ -591,7 +596,8 @@ export interface MedicalRecordCreateBody {
   appointmentId: string;
   doctorId: string;
   diagnosis?: string;
-  prescription?: string;
+  treatmentAdvice?: string;
+  followUpAdvice?: string;
   labReports?: string[];
 }
 export interface PrescriptionCreateBody {
@@ -828,6 +834,9 @@ export const api = createApi({
     'Medicine',
     'MedicationOrder',
     'InventoryMovement',
+    'Injectable',
+    'InjectionOrder',
+    'InjectionStockMovement',
     'LabTest',
     'TestOrder',
     'TestResult',
@@ -1780,6 +1789,107 @@ export const api = createApi({
       invalidatesTags: [{ type: 'Medicine', id: 'LIST' }, { type: 'InventoryMovement', id: 'LIST' }],
     }),
 
+    // ── Injectables (catalogue + stock) ──────────────────────────────────────
+    listInjectables: build.query<Injectable[], { q?: string; category?: string } | void>({
+      query: (params) => ({ url: '/injectables', params: params ?? undefined }),
+      providesTags: [{ type: 'Injectable', id: 'LIST' }],
+    }),
+    createInjectable: build.mutation<Injectable, Partial<Injectable>>({
+      query: (body) => ({ url: '/injectables', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Injectable', id: 'LIST' }],
+    }),
+    updateInjectable: build.mutation<Injectable, { id: string; body: Partial<Injectable> }>({
+      query: ({ id, body }) => ({ url: `/injectables/${id}`, method: 'PUT', body }),
+      invalidatesTags: [{ type: 'Injectable', id: 'LIST' }],
+    }),
+    deleteInjectable: build.mutation<void, string>({
+      query: (id) => ({ url: `/injectables/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'Injectable', id: 'LIST' }],
+    }),
+    listInjectableLowStock: build.query<Injectable[], void>({
+      query: () => '/injectables/stock/low',
+      providesTags: [{ type: 'Injectable', id: 'LIST' }],
+    }),
+    listInjectableMovements: build.query<
+      InjectionStockMovement[],
+      { injectableId?: string; type?: string } | void
+    >({
+      query: (params) => ({ url: '/injectables/stock/movements', params: params ?? undefined }),
+      providesTags: [{ type: 'InjectionStockMovement', id: 'LIST' }],
+    }),
+    restockInjectable: build.mutation<InjectionStockMovement, {
+      injectableId: string;
+      quantity: number;
+      lotNumber?: string;
+      expiryDate?: string;
+      notes?: string;
+    }>({
+      query: (body) => ({ url: '/injectables/stock/restock', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Injectable', id: 'LIST' }, { type: 'InjectionStockMovement', id: 'LIST' }],
+    }),
+    adjustInjectableStock: build.mutation<InjectionStockMovement, {
+      injectableId: string;
+      quantity: number;
+      movementType: string;
+      notes?: string;
+    }>({
+      query: (body) => ({ url: '/injectables/stock/adjust', method: 'POST', body }),
+      invalidatesTags: [{ type: 'Injectable', id: 'LIST' }, { type: 'InjectionStockMovement', id: 'LIST' }],
+    }),
+
+    // ── Injection Orders ─────────────────────────────────────────────────────
+    listInjectionOrders: build.query<
+      InjectionOrder[],
+      { patientId?: string; doctorId?: string; appointmentId?: string; status?: string; q?: string } | void
+    >({
+      query: (params) => ({ url: '/injection-orders', params: params ?? undefined }),
+      providesTags: [{ type: 'InjectionOrder', id: 'LIST' }],
+    }),
+    createInjectionOrder: build.mutation<InjectionOrder, {
+      appointmentId?: string;
+      patientId: string;
+      /** Omit when the caller is the ordering doctor — the server writes their
+       *  own id. A non-doctor must name the prescriber. */
+      doctorId?: string;
+      prescriptionId?: string;
+      injectableId?: string;
+      injectableName: string;
+      dose?: string;
+      route: string;
+      quantity: number;
+      scheduledFor?: string;
+      instructions?: string;
+    }>({
+      query: (body) => ({ url: '/injection-orders', method: 'POST', body }),
+      invalidatesTags: [{ type: 'InjectionOrder', id: 'LIST' }],
+    }),
+    /** The nurse's record at the moment the shot is given. `site` is required;
+     *  `quantity` overrides the order's planned count if what was drawn up
+     *  differed. This is what moves stock. */
+    administerInjectionOrder: build.mutation<
+      InjectionOrder,
+      { id: string; site: string; notes?: string; quantity?: number }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/injection-orders/${id}/administer`,
+        method: 'PATCH',
+        body,
+      }),
+      invalidatesTags: [
+        { type: 'InjectionOrder', id: 'LIST' },
+        { type: 'Injectable', id: 'LIST' },
+        { type: 'InjectionStockMovement', id: 'LIST' },
+      ],
+    }),
+    cancelInjectionOrder: build.mutation<InjectionOrder, string>({
+      query: (id) => ({ url: `/injection-orders/${id}/cancel`, method: 'PATCH' }),
+      invalidatesTags: [{ type: 'InjectionOrder', id: 'LIST' }],
+    }),
+    deleteInjectionOrder: build.mutation<void, string>({
+      query: (id) => ({ url: `/injection-orders/${id}`, method: 'DELETE' }),
+      invalidatesTags: [{ type: 'InjectionOrder', id: 'LIST' }],
+    }),
+
     // ── Lab test catalog ─────────────────────────────────────────────────────
     listLabTests: build.query<LabTest[], void>({
       query: () => '/lab-tests',
@@ -2114,6 +2224,19 @@ export const {
   useListLowStockQuery,
   useRestockMedicineMutation,
   useAdjustInventoryMutation,
+  useListInjectablesQuery,
+  useCreateInjectableMutation,
+  useUpdateInjectableMutation,
+  useDeleteInjectableMutation,
+  useListInjectableLowStockQuery,
+  useListInjectableMovementsQuery,
+  useRestockInjectableMutation,
+  useAdjustInjectableStockMutation,
+  useListInjectionOrdersQuery,
+  useCreateInjectionOrderMutation,
+  useAdministerInjectionOrderMutation,
+  useCancelInjectionOrderMutation,
+  useDeleteInjectionOrderMutation,
   useListLabTestsQuery,
   useListLabTestsPagedQuery,
   useLazyListLabTestsPagedQuery,
