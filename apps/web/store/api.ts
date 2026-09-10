@@ -569,6 +569,8 @@ export interface PatientProfileBody {
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
+  relationType?: string;
+  relationName?: string;
   allergies?: string;
   chronicDiseases?: string;
   emergencyContact?: string;

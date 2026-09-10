@@ -16,6 +16,7 @@ import type { RoleViewProps } from '@/components/RoleView';
 import type { Patient } from '@/lib/types';
 import { adminRole, doctorRole, nurseRole } from '@/lib/roles';
 import { fmtDate, fmtAge, ageFromDob } from '@/lib/date';
+import { formatRelationLine } from '@/components/patients/patientProfile';
 import {
   useListPatientsPagedQuery,
   useLazyListPatientsPagedQuery,
@@ -41,6 +42,8 @@ interface PatientRow {
   bloodGroup: string;
   /** ISO date of birth, or "" — the Age column is derived from this. */
   dateOfBirth: string;
+  /** "W/O Ramesh Kumar" etc., or "" — shown under the name. */
+  relationLine: string;
   /** Completed visits. */
   visits: number;
   /** Appointments of any status. */
@@ -57,14 +60,21 @@ interface Column {
   align?: 'right';
 }
 
-const nameWithPhoneColumn: Column = {
-  header: 'Patient',
-  render: (row) => (
+/** The name plus, underneath, the "W/O … / D/O … / B/O …" line when the record
+ *  has one. */
+function NameCell({ row, sub }: { row: PatientRow; sub?: string }) {
+  return (
     <>
       <p className="font-medium text-slate-900">{row.name}</p>
-      <p className="text-xs text-slate-500">{row.phone}</p>
+      {row.relationLine && <p className="text-xs text-slate-500">{row.relationLine}</p>}
+      {sub && <p className="text-xs text-slate-500">{sub}</p>}
     </>
-  ),
+  );
+}
+
+const nameWithPhoneColumn: Column = {
+  header: 'Patient',
+  render: (row) => <NameCell row={row} sub={row.phone} />,
 };
 const genderColumn: Column = {
   header: 'Gender',
@@ -114,7 +124,7 @@ const viewByRole: Record<
     subtitle: 'Registered patients',
     searchPlaceholder: 'Search by name, email or phone…',
     columns: [
-      { header: 'Name', render: (row) => <span className="font-medium text-slate-900">{row.name}</span> },
+      { header: 'Name', render: (row) => <NameCell row={row} /> },
       { header: 'Email', render: (row) => <span className="text-sm">{row.email}</span> },
       genderColumn,
       ageColumn,
@@ -165,6 +175,7 @@ function toRow(patient: Patient): PatientRow {
     gender: patient.gender || '',
     bloodGroup: patient.bloodGroup || '—',
     dateOfBirth: patient.dateOfBirth || '',
+    relationLine: formatRelationLine(patient.relationType, patient.relationName),
     // Aggregated by the API for this page (withStats).
     visits: patient.visitCount ?? 0,
     appointments: patient.visitCount ?? 0,

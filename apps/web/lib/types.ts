@@ -35,6 +35,10 @@ export interface Patient {
   dateOfBirth: string;
   gender: string;
   bloodGroup: string;
+  /** The "W/O / D/O / B/O" identity line: relationType is
+   *  "wife_of" | "daughter_of" | "baby_of" (or ""), relationName the relative. */
+  relationType: string;
+  relationName: string;
   allergies: string;
   chronicDiseases: string;
   emergencyContact: string;
@@ -709,6 +713,8 @@ export interface PatientDetails {
   dateOfBirth?: string;
   gender?: string;
   bloodGroup?: string;
+  relationType?: string;
+  relationName?: string;
   allergies?: string;
   chronicDiseases?: string;
   emergencyContact?: string;

@@ -14,6 +14,7 @@ import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { hasPermission } from '@/lib/auth';
 import { fmtAge } from '@/lib/date';
+import { formatRelationLine } from '@/components/patients/patientProfile';
 import type { Patient } from '@/lib/types';
 import {
   useGetSuperadminPatientsPagedQuery,
@@ -109,7 +110,14 @@ export function PlatformPatients({ session }: RoleViewProps) {
                         <HospitalBadge hospitalId={p.hospitalId} hospitals={hospitals} />
                       </td>
                     )}
-                    <td className="py-3 px-6 font-medium text-slate-900">{p.user?.name ?? '—'}</td>
+                    <td className="py-3 px-6 font-medium text-slate-900">
+                      {p.user?.name ?? '—'}
+                      {formatRelationLine(p.relationType, p.relationName) && (
+                        <span className="block text-xs font-normal text-slate-500">
+                          {formatRelationLine(p.relationType, p.relationName)}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3 px-6 text-slate-600 text-sm">{p.user?.email ?? '—'}</td>
                     <td className="py-3 px-6 text-slate-600 capitalize">{p.gender || '—'}</td>
                     <td className="py-3 px-6 text-slate-600">{fmtAge(p.dateOfBirth)}</td>

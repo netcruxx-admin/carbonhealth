@@ -38,7 +38,7 @@ import {
 } from '@/store/api';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
-import { formatPatientAddress } from '@/components/patients/patientProfile';
+import { formatPatientAddress, formatRelationLine } from '@/components/patients/patientProfile';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { fmtAge } from '@/lib/date';
 
@@ -197,6 +197,11 @@ export default function PatientDetailPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold text-slate-900">{name}</h2>
+            {formatRelationLine(patientRecord.relationType, patientRecord.relationName) && (
+              <p className="text-sm text-slate-500 mt-0.5">
+                {formatRelationLine(patientRecord.relationType, patientRecord.relationName)}
+              </p>
+            )}
             <div className="flex flex-wrap gap-x-5 gap-y-1 mt-1 text-sm text-slate-600">
               <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5 text-slate-400" /> {patientUser?.email ?? '—'}</span>
               <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> {patientRecord.phone || '—'}</span>
