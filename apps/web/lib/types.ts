@@ -360,6 +360,84 @@ export interface InventoryMovement {
   performedByName?: string;
 }
 
+// ── Injections ──────────────────────────────────────────────────────────────
+// The injectable-shot mirror of Medicine / MedicationOrder / InventoryMovement.
+// A single-dose injectable is consumed when it is given, so there is no
+// pharmacist dispense step: the doctor orders, the nurse administers, and the
+// administration moves stock.
+
+export const INJECTION_ROUTES = ['IM', 'IV', 'SC', 'ID'] as const;
+export type InjectionRoute = (typeof INJECTION_ROUTES)[number];
+
+/** A stocked injectable product — the InjectionOrder's Medicine. */
+export interface Injectable {
+  id: string;
+  hospitalId?: string;
+  name: string;
+  category: string;
+  form: string;        // vial | ampoule | prefilled syringe
+  strength: string;    // "1 g", "0.5 mL"
+  route: string;       // default route for this product
+  price: number;
+  stock: number;       // vials/ampoules on hand
+  reorderLevel: number;
+  lotNumber: string;
+  expiryDate: string;
+  location: string;
+  unit: string;
+}
+
+export type InjectionOrderStatus = 'ordered' | 'administered' | 'cancelled';
+
+export interface InjectionOrder {
+  id: string;
+  hospitalId?: string;
+  appointmentId?: string | null;
+  patientId: string;
+  doctorId: string;
+  prescriptionId?: string | null;
+  /** Catalogue link. Null for a free-text order, which moves no stock. */
+  injectableId?: string | null;
+  injectableName: string;
+  dose: string;
+  route: string;
+  /** Vials/ampoules the administration consumes. */
+  quantity: number;
+  scheduledFor: string;
+  instructions: string;
+  status: InjectionOrderStatus;
+  /** Filled by the nurse at administration. */
+  site: string;
+  notes: string;
+  administeredBy?: string | null;
+  administeredAt?: string | null;
+  orderedAt: string;
+  patientName?: string;
+  patientPhone?: string;
+  doctorName?: string;
+  administeredByName?: string;
+  /** Catalogue stock on hand right now, so the queue can flag an un-giveable shot. */
+  stockOnHand?: number | null;
+}
+
+export type InjectionMovementType = 'restock' | 'administer' | 'adjustment' | 'expired';
+
+export interface InjectionStockMovement {
+  id: string;
+  hospitalId?: string;
+  injectableId: string;
+  movementType: InjectionMovementType;
+  quantity: number;
+  lotNumber: string;
+  expiryDate: string;
+  referenceId: string;
+  performedBy: string;
+  notes: string;
+  createdAt: string;
+  injectableName?: string;
+  performedByName?: string;
+}
+
 export interface TestParameterTemplate {
   name: string;
   unit: string;

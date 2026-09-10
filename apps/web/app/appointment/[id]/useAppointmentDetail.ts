@@ -124,6 +124,9 @@ export function useAppointmentDetail() {
   const canDeletePrescription = hasPermission(session, 'prescriptions.delete');
   const canDeleteVitals = hasPermission(session, 'vitals.delete');
   const canDeleteTestOrder = hasPermission(session, 'lab_orders.delete');
+  // Ordering a shot is its own grant — a role can prescribe without it, or
+  // hold it without prescribing — so it is not folded into canManage.
+  const canOrderInjection = canManage && hasPermission(session, 'injection_orders.manage');
 
   const isPast = !!appointment && appointment.date < today;
   const notCancelled = appointment?.status !== 'cancelled';
@@ -158,6 +161,7 @@ export function useAppointmentDetail() {
     isPatient,
     isAdmin,
     canManage,
+    canOrderInjection,
     canDeletePrescription,
     canDeleteVitals,
     canDeleteTestOrder,

@@ -18,6 +18,7 @@ import { EditVitalsModal } from './components/EditVitalsModal';
 import { AddPrescriptionModal } from './components/AddPrescriptionModal';
 import { EditPrescriptionModal } from './components/EditPrescriptionModal';
 import { AddClinicalNotesModal } from './components/AddClinicalNotesModal';
+import { AddInjectionOrderModal } from './components/AddInjectionOrderModal';
 import { OrderTestModal } from './components/OrderTestModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
@@ -29,7 +30,7 @@ import {
   useDeleteVitalsMutation,
 } from '@/store/api';
 
-type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'edit-vitals' | 'rx' | 'edit-rx' | 'notes' | 'laborder' | 'followup' | null;
+type OpenModal = 'reschedule' | 'edit' | 'vitals' | 'edit-vitals' | 'rx' | 'edit-rx' | 'notes' | 'injection' | 'laborder' | 'followup' | null;
 
 // Reused page shell for the loading / error states.
 function Chrome({ children }: { children: React.ReactNode }) {
@@ -63,6 +64,7 @@ export default function AppointmentDetailPage() {
     isPatient,
     isAdmin,
     canManage,
+    canOrderInjection,
     canDeletePrescription,
     canDeleteVitals,
     canDeleteTestOrder,
@@ -241,6 +243,7 @@ export default function AppointmentDetailPage() {
           isPatient={isPatient}
           isAdmin={isAdmin}
           canManage={canManage}
+          canOrderInjection={canOrderInjection}
           canReschedule={canReschedule}
           canComplete={canComplete}
           canCancel={canCancel}
@@ -249,6 +252,7 @@ export default function AppointmentDetailPage() {
           onVitals={() => setModal('vitals')}
           onPrescription={() => setModal('rx')}
           onClinicalNotes={() => setModal('notes')}
+          onOrderInjection={() => setModal('injection')}
           onOrderTest={() => setModal('laborder')}
           onFollowUp={() => setModal('followup')}
           onConfirm={setConfirmAction}
@@ -327,6 +331,16 @@ export default function AppointmentDetailPage() {
           patientId={appointment.patientId}
           doctorId={appointment.doctorId}
           medicineOptions={medicineOptions}
+          onClose={closeModal}
+          onSaved={afterSave}
+        />
+      )}
+
+      {modal === 'injection' && (
+        <AddInjectionOrderModal
+          appointmentId={appointmentId}
+          patientId={appointment.patientId}
+          doctorId={appointment.doctorId}
           onClose={closeModal}
           onSaved={afterSave}
         />

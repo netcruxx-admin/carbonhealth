@@ -10,6 +10,7 @@ import {
   Pencil,
   Pill,
   FlaskConical,
+  Syringe,
   Trash2,
   Video,
   XCircle,
@@ -24,6 +25,7 @@ interface ActionsToolbarProps {
   isPatient: boolean;
   isAdmin: boolean;
   canManage: boolean;
+  canOrderInjection: boolean;
   canReschedule: boolean;
   canComplete: boolean;
   canCancel: boolean;
@@ -32,6 +34,7 @@ interface ActionsToolbarProps {
   onVitals: () => void;
   onPrescription: () => void;
   onClinicalNotes: () => void;
+  onOrderInjection: () => void;
   onOrderTest: () => void;
   onFollowUp: () => void;
   onConfirm: (action: ConfirmAction) => void;
@@ -46,6 +49,7 @@ export function ActionsToolbar({
   isPatient,
   isAdmin,
   canManage,
+  canOrderInjection,
   canReschedule,
   canComplete,
   canCancel,
@@ -54,6 +58,7 @@ export function ActionsToolbar({
   onVitals,
   onPrescription,
   onClinicalNotes,
+  onOrderInjection,
   onOrderTest,
   onFollowUp,
   onConfirm,
@@ -94,6 +99,11 @@ export function ActionsToolbar({
           <button onClick={onPrescription} className={secondaryBtn}>
             <Pill className="w-4 h-4" /> Add Prescription
           </button>
+          {canOrderInjection && (
+            <button onClick={onOrderInjection} className={secondaryBtn}>
+              <Syringe className="w-4 h-4" /> Order Injection
+            </button>
+          )}
           {modules.lab && (
             <button onClick={onOrderTest} className={secondaryBtn}>
               <FlaskConical className="w-4 h-4" /> Order Test
