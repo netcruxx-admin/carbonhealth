@@ -702,7 +702,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
             enableReinitialize={false}
             onSubmit={submit}
           >
-            {({ isSubmitting, validateForm, setTouched, values }) => {
+            {({ isSubmitting, validateForm, setTouched, values, dirty }) => {
               const goNext = async () => {
                 const errors = await validateForm();
                 if (Object.keys(errors).length > 0) {
@@ -776,7 +776,7 @@ export function EditHospitalWizard({ open, hospital, onClose, onUpdated }: Props
                       {isLast ? (
                         <button
                           type="submit"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || !dirty}
                           className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                         >
                           {isSubmitting ? (

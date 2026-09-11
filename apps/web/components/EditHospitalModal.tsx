@@ -166,7 +166,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
               }
             }}
           >
-            {({ isSubmitting, values, setFieldValue }) => (
+            {({ isSubmitting, values, setFieldValue, dirty }) => (
               <Form className="space-y-5">
 
                 {/* ── Basic Info ─────────────────────────────────────────── */}
@@ -363,7 +363,7 @@ export function EditHospitalModal({ open, hospital, onClose, onSuccess }: Props)
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || !dirty}
                     className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg font-semibold text-sm hover:shadow-lg transition disabled:opacity-50"
                   >
                     {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}

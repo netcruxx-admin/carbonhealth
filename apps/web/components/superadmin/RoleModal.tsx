@@ -98,7 +98,7 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
             }
           }}
         >
-          {({ values, handleChange, handleBlur, setFieldValue, isSubmitting }) => (
+          {({ values, handleChange, handleBlur, setFieldValue, isSubmitting, dirty }) => (
             <Form className="flex flex-col flex-1 min-h-0">
               <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
                 {/* Row 1: Role Code + Display Name */}
@@ -170,7 +170,7 @@ export function RoleModal({ open, onClose, onSuccess, role }: Props) {
               {/* Sticky footer buttons */}
               <div className="flex gap-3 px-6 py-4 border-t border-slate-100 shrink-0">
                 <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm font-medium transition">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
+                <button type="submit" disabled={isSubmitting || !dirty} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50">
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEdit ? 'Save Changes' : 'Add Role'}
                 </button>
               </div>
