@@ -35,6 +35,7 @@ import {
 import { FollowUpModal } from '@/components/FollowUpModal';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { Spinner } from '@/components/ui/spinner';
@@ -74,10 +75,10 @@ export function DoctorAppointments({ session }: RoleViewProps) {
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
   // Today by default — this is the day's work queue, not a full history; the
-  // date picker right below still opens it up to any other day.
-  const [date, setDate] = useState(todayStr);
+  // date filter right below still opens it up to any other day or range.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${date}|${sortToken}` });
+  const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${dateRange.from}|${dateRange.to}|${sortToken}` });
 
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [prescribing, setPrescribing] = useState<Appointment | null>(null);
@@ -99,7 +100,8 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const listArgs = {
     q: table.q.trim() || undefined,
     status: status === 'all' ? undefined : status,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
   };
   const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
@@ -221,19 +223,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-            {date && (
-              <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-                Clear
-              </button>
-            )}
-          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
           <div className="ml-auto">
             <ExportButton
               filename="my-appointments"

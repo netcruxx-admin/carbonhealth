@@ -13,6 +13,7 @@ import { SortableTh, compareAppointments, useAppointmentSort } from './appointme
 import { hasPermission } from '@/lib/auth';
 import { ActionIcon } from '../ActionIcon';
 import { Spinner } from '@/components/ui/spinner';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -29,9 +30,8 @@ function DateBadge({ date }: { date: string }) {
 export function PatientAppointments({ session }: RoleViewProps) {
   const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
-  // Today by default, same as every staff appointment board — Clear (next to
-  // the date picker below) opens this back up to the full history.
-  const [date, setDate] = useState(todayStr);
+  // Today by default, same as every staff appointment board.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const { sort, toggle } = useAppointmentSort();
 
   const patientId = session?.patient?.id ?? '';
@@ -44,7 +44,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
-    .filter((a) => !date || a.date === date)
+    .filter((a) => (!dateRange.from || a.date >= dateRange.from) && (!dateRange.to || a.date <= dateRange.to))
     .sort(compareAppointments(sort));
 
   return (
@@ -65,19 +65,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-              Clear
-            </button>
-          )}
-        </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
         {canBook && (
           <Link
             href="/dashboard/book"
@@ -92,7 +80,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
         <div className="px-6 py-4 border-b">
           <h3 className="font-semibold text-slate-900">
             Appointments ({sorted.length})
-            {(date || statusFilter !== 'all') && <span className="text-slate-400 font-normal"> (filtered)</span>}
+            {(dateRange.from || dateRange.to || statusFilter !== 'all') && <span className="text-slate-400 font-normal"> (filtered)</span>}
           </h3>
         </div>
         {isLoading ? (
@@ -101,11 +89,11 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-600 mb-2">
-              {date || statusFilter !== 'all' ? 'No appointments match this filter.' : 'No appointments yet'}
+              {dateRange.from || dateRange.to || statusFilter !== 'all' ? 'No appointments match this filter.' : 'No appointments yet'}
             </p>
-            {(date || statusFilter !== 'all') && appointments.length > 0 && (
+            {(dateRange.from || dateRange.to || statusFilter !== 'all') && appointments.length > 0 && (
               <button
-                onClick={() => { setDate(''); setStatusFilter('all'); }}
+                onClick={() => { setDateRange({ from: '', to: '' }); setStatusFilter('all'); }}
                 className="text-sm text-cyan-600 hover:text-cyan-700 font-medium mb-4"
               >
                 Clear filters to see your full history

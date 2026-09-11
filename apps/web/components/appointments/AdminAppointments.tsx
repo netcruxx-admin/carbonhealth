@@ -40,6 +40,7 @@ import {
   vitalsToPayload,
 } from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { useDebounced } from '@/hooks/useDebounced';
@@ -188,7 +189,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   // Today by default — this is the day's board, not the full history; Clear
   // (next to the date picker below) opens it back up to every date.
-  const [date, setDate] = useState(todayStr);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const [page, setPage] = useState(1);
   const { sort, toggle, token: sortToken } = useAppointmentSort();
 
@@ -197,7 +198,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
     q: debouncedQuery.trim() || undefined,
     status: status === 'all' ? undefined : status,
     departmentId: deptId === 'all' ? undefined : deptId,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
   };
   const { data: page_, isLoading } = useListAppointmentsPagedQuery({
@@ -220,7 +222,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, status, deptId, date, sortToken]);
+  }, [debouncedQuery, status, deptId, dateRange.from, dateRange.to, sortToken]);
 
   const doctorName = useCallback(
     (id: string) => {
@@ -366,19 +368,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-            {date && (
-              <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-                Clear
-              </button>
-            )}
-          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
           <div className="ml-auto flex items-center gap-2">
             <ExportButton
               filename="appointments"

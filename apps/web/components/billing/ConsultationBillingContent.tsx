@@ -22,6 +22,7 @@ import { apiError } from '@/lib/apiError';
 import type { ConsultationBillingRow } from '@/lib/types';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
 /** How money is taken at the counter. Mirrors pricing.COUNTER_PAYMENT_MODES on
  *  the server — online payments settle themselves through the gateway. */
@@ -181,14 +182,15 @@ function Row({
  *  the endpoint enforces. A viewer without it still sees what is outstanding;
  *  they just cannot say it has been paid. */
 export function ConsultationBillingContent({ canCollect = false }: { canCollect?: boolean } = {}) {
-  const [selectedDate, setSelectedDate] = useState<string>(todayIso());
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayIso(), to: todayIso() });
 
   const { data: summary, isLoading, isFetching } = useGetConsultationBillingSummaryQuery(
-    { date: selectedDate },
+    { dateFrom: dateRange.from || undefined, dateTo: dateRange.to || undefined },
     { refetchOnMountOrArgChange: true },
   );
 
-  const isToday = selectedDate === todayIso();
+  const isToday = dateRange.from === todayIso() && dateRange.to === todayIso();
+  const rangeLabel = dateRange.from === dateRange.to ? dateRange.from : `${dateRange.from} to ${dateRange.to}`;
 
   if (isLoading) {
     return (
@@ -202,17 +204,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <label htmlFor="consultation-billing-date" className="text-sm font-medium text-slate-700">
-            Date
-          </label>
-          <input
-            id="consultation-billing-date"
-            type="date"
-            value={selectedDate}
-            max={todayIso()}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayIso()} max={todayIso()} />
           {isToday && (
             <span className="text-xs font-medium bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full">
               Today
@@ -262,7 +254,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
         <div className="px-6 py-4 border-b flex items-center gap-2">
           <ReceiptText className="w-4 h-4 text-slate-500" />
           <h3 className="font-semibold text-slate-900">
-            Consultations — {selectedDate}
+            Consultations — {rangeLabel}
             {summary && summary.billCount > 0 && (
               <span className="ml-2 text-sm font-normal text-slate-500">
                 ({summary.billCount} transaction{summary.billCount !== 1 ? 's' : ''})
@@ -274,7 +266,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
         {!summary || summary.rows.length === 0 ? (
           <div className="text-center py-16">
             <Receipt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">No consultation bills for this date.</p>
+            <p className="text-slate-500 text-sm">No consultation bills for this period.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

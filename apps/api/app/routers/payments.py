@@ -3,6 +3,7 @@ import hmac
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import consent as consent_lib, models, pricing, printing, schemas
@@ -43,6 +44,27 @@ def _resolve_razorpay_keys(db: Session, tenant_id: str) -> tuple[str, str]:
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         detail="Online payments are not configured for this hospital. Use cash payment instead.",
     )
+
+
+def _billing_date_filter(query, date: Optional[str], date_from: Optional[str], date_to: Optional[str]):
+    """Narrow a Payment query to a day (`date`) or a range (`date_from`/`date_to`).
+
+    `created_at` is an ISO datetime string, so comparing its first 10 characters
+    against plain YYYY-MM-DD bounds sorts correctly without needing to guess a
+    time-of-day boundary. A range takes priority when both are given; with
+    neither, the caller's own "defaults to today" behavior is unaffected.
+    """
+    if date_from or date_to:
+        day = func.substr(models.Payment.created_at, 1, 10)
+        if date_from:
+            query = query.filter(day >= date_from)
+        if date_to:
+            query = query.filter(day <= date_to)
+        return query
+    import datetime as dt
+
+    report_date = date or dt.date.today().isoformat()
+    return query.filter(models.Payment.created_at.like(f"{report_date}%"))
 
 
 def _razorpay_client(db: Session, tenant_id: str):
@@ -107,30 +129,31 @@ def list_payments(
 @router.get("/consultation-billing", response_model=schemas.ConsultationBillingSummary)
 def get_consultation_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     _scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    """Day-level consultation billing for the front desk.
+    """Day- or range-level consultation billing for the front desk.
 
     The counterpart to the pharmacy report: every consultation payment for the
-    date with the patient, the doctor, what kind of visit it was billed as, and
-    the method breakdown. `pending_total` is billed-but-uncollected — the number
-    the desk chases before close of day, and the reason status travels on each
-    row rather than being filtered out.
+    day or range with the patient, the doctor, what kind of visit it was billed
+    as, and the method breakdown. `pending_total` is billed-but-uncollected — the
+    number the desk chases before close of day, and the reason status travels on
+    each row rather than being filtered out.
     """
     import datetime as dt
 
-    report_date = date or dt.date.today().isoformat()
+    report_date = date or date_from or dt.date.today().isoformat()
 
-    payments = (
+    query = (
         scoped(db, models.Payment, tenant_id)
         .filter(models.Payment.payment_type == "consultation")
-        .filter(models.Payment.created_at.like(f"{report_date}%"))
-        .order_by(models.Payment.created_at.asc())
-        .all()
     )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve display names in one query each, rather than per row.
     patient_map = patient_display(db, list({p.patient_id for p in payments}), tenant_id)
@@ -208,28 +231,30 @@ def get_consultation_billing_summary(
 @router.get("/pharmacy-billing", response_model=schemas.PharmacyBillingSummary)
 def get_pharmacy_billing_summary(
     date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     db: Session = Depends(get_db),
     user: models.User = Depends(get_current_user),
     _scope: str = Depends(require_permission("payments.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    """Day-level billing summary for the pharmacy counter.
+    """Day- or range-level billing summary for the pharmacy counter.
 
-    Returns every pharmacy payment for the given date together with the patient
-    name, medicine details and method breakdown — everything the pharmacist needs
-    for end-of-shift reconciliation. Defaults to today when no date is supplied.
+    Returns every pharmacy payment for the given day or range together with the
+    patient name, medicine details and method breakdown — everything the
+    pharmacist needs for end-of-shift reconciliation. Defaults to today when
+    nothing is supplied.
     """
     import datetime as dt
 
-    report_date = date or dt.date.today().isoformat()
+    report_date = date or date_from or dt.date.today().isoformat()
 
-    payments = (
+    query = (
         scoped(db, models.Payment, tenant_id)
         .filter(models.Payment.payment_type == "pharmacy")
-        .filter(models.Payment.created_at.like(f"{report_date}%"))
-        .order_by(models.Payment.created_at.asc())
-        .all()
     )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
 
     # Resolve patient names in one query.
     patient_ids = list({p.patient_id for p in payments})

@@ -21,6 +21,7 @@ import {
   vitalsToPayload,
 } from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { SortableTh, useAppointmentSort } from './appointmentSort';
 import { Calendar } from '@/components/ui/calendar';
 import { TablePagination } from '@/components/TablePagination';
@@ -117,20 +118,20 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const [error, setError] = useState('');
   const [vitalsError, setVitalsError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  // Today by default, same as every hospital's own appointment board — Clear
-  // opens this cross-hospital view back up to every date.
-  const [date, setDate] = useState(todayStr);
+  // Today by default, same as every hospital's own appointment board.
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
 
   // Hospital, status, search and paging are all applied by the API. Patient and
   // doctor names arrive resolved on each row, so this screen no longer pulls
   // every patient and doctor on the platform to turn two ids into two names.
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${date}|${sortToken}` });
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${dateRange.from}|${dateRange.to}|${sortToken}` });
   const { data: appointmentPage, isLoading, refetch } = useGetSuperadminAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     hospitalId: selectedHospitalId || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
     limit: table.limit,
     offset: table.offset,
@@ -255,26 +256,14 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-              Clear
-            </button>
-          )}
-        </div>
+        <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
             {totalAppointments} appointment{totalAppointments !== 1 ? 's' : ''}
-            {(selectedHospitalId || table.search || statusFilter !== 'all' || date) && <span className="text-slate-400"> (filtered)</span>}
+            {(selectedHospitalId || table.search || statusFilter !== 'all' || dateRange.from || dateRange.to) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'appointments.create') && (
             <button

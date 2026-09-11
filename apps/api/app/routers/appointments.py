@@ -69,6 +69,8 @@ def list_appointments(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     department_id: Optional[str] = Query(default=None, alias="departmentId"),
     date: Optional[str] = Query(default=None),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
     sort: str = Query(default=DEFAULT_APPOINTMENT_SORT),
     limit: Optional[int] = Query(default=None, ge=1),
     offset: int = Query(default=0, ge=0),
@@ -95,6 +97,12 @@ def list_appointments(
         query = query.filter(models.Appointment.department_id == department_id)
     if date:
         query = query.filter(models.Appointment.date == date)
+    # Additive range filter, independent of `date` above: a caller that wants
+    # a single day still sends just `date`, one exact match either way.
+    if date_from:
+        query = query.filter(models.Appointment.date >= date_from)
+    if date_to:
+        query = query.filter(models.Appointment.date <= date_to)
     # Matches the patient's name/phone or the doctor's name.
     query = appointment_name_search(query, q)
     # Newest first by default; `sort` overrides. Always tie-broken by id for a
