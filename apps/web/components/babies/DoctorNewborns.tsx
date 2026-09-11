@@ -227,7 +227,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           }
         }}
       >
-        {({ values, handleChange, isSubmitting }) => (
+        {({ values, handleChange, isSubmitting, dirty }) => (
           <Form className="space-y-3">
             <Field label="Mother">
               <select name="motherPatientId" value={values.motherPatientId} onChange={handleChange} className={inputCls}>
@@ -263,7 +263,7 @@ function RegisterBabyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-              <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
                 {isSubmitting ? 'Registering…' : 'Register'}
               </button>
             </div>
@@ -310,7 +310,7 @@ function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: bool
           }
         }}
       >
-        {({ values, handleChange, isSubmitting }) => (
+        {({ values, handleChange, isSubmitting, dirty }) => (
           <Form className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Date"><input type="date" name="date" value={values.date} max={today()} onChange={handleChange} className={inputCls} /></Field>
@@ -322,7 +322,7 @@ function GrowthModal({ baby, canManage, onClose }: { baby: Baby; canManage: bool
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             {canManage && (
-              <button type="submit" disabled={isSubmitting} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold disabled:opacity-50">
+              <button type="submit" disabled={isSubmitting || !dirty} className="w-full py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold disabled:opacity-50">
                 {isSubmitting ? 'Adding…' : 'Add measurement'}
               </button>
             )}

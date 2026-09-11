@@ -236,7 +236,7 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           }
         }}
       >
-        {({ values, handleChange, setFieldValue, isSubmitting }) => (
+        {({ values, handleChange, setFieldValue, isSubmitting, dirty }) => (
           <Form className="space-y-3">
             <Field label="Patient">
               <select
@@ -281,7 +281,7 @@ function NewPregnancyModal({ onClose, onSaved }: { onClose: () => void; onSaved:
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-              <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+              <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
                 {isSubmitting ? 'Saving…' : 'Save record'}
               </button>
             </div>
@@ -351,7 +351,7 @@ function NewVisitModal({
         }
       }}
     >
-      {({ values, handleChange, isSubmitting }) => {
+      {({ values, handleChange, isSubmitting, dirty }) => {
         const weeks = gestationalAge(record.lmp, new Date(values.date + 'T00:00:00')).weeks;
         return (
           <Modal title={`Antenatal visit · week ${weeks}`} onClose={onClose}>
@@ -375,7 +375,7 @@ function NewVisitModal({
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-1">
                 <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-900">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
+                <button type="submit" disabled={isSubmitting || !dirty} className="px-4 py-2 text-sm font-semibold text-white bg-gradient-to-r from-cyan-500 to-brand-teal rounded-lg disabled:opacity-50">
                   {isSubmitting ? 'Saving…' : 'Save visit'}
                 </button>
               </div>
