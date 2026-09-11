@@ -387,7 +387,7 @@ export function PatientBook({ session }: RoleViewProps) {
               }
             }}
           >
-            {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting }) => {
+            {({ values, errors, touched, setFieldValue, setFieldTouched, validateForm, isSubmitting, dirty }) => {
               // Resolve the doctor's name for the selected slot so the patient
               // can see who they'll see — but only after they've picked a time.
               const assignedDoc = (() => {
@@ -644,7 +644,7 @@ export function PatientBook({ session }: RoleViewProps) {
                         </button>
                         <button
                           type="submit"
-                          disabled={isSubmitting || paymentStatus !== 'idle' || success}
+                          disabled={isSubmitting || !dirty || paymentStatus !== 'idle' || success}
                           className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
                         >
                           {payBtnContent}
