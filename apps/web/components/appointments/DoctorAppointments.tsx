@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Formik, Form } from 'formik';
+import { Formik, Form, useFormik } from 'formik';
 import * as Yup from 'yup';
 import { Search, CalendarDays, Eye, Activity, Pill, X, CheckCircle2, FlaskConical, CalendarPlus } from 'lucide-react';
 
@@ -84,9 +84,6 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const [completing, setCompleting] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [orderingTests, setOrderingTests] = useState<Appointment | null>(null);
-  const [orderSel, setOrderSel] = useState<Set<string>>(new Set());
-  const [orderPriority, setOrderPriority] = useState<'routine' | 'urgent'>('routine');
-  const [orderNote, setOrderNote] = useState('');
   const [testQuery, setTestQuery] = useState('');
   const [toast, setToast] = useState('');
   const [vitalsError, setVitalsError] = useState('');
@@ -159,43 +156,46 @@ export function DoctorAppointments({ session }: RoleViewProps) {
     }
   };
 
+  const orderFormik = useFormik({
+    initialValues: { testIds: [] as string[], priority: 'routine' as 'routine' | 'urgent', note: '' },
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!orderingTests || !doctor || values.testIds.length === 0) { setSubmitting(false); return; }
+      const items = tests
+        .filter((t) => values.testIds.includes(t.id))
+        .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
+      setOrderError('');
+      try {
+        // Status and timestamps are the server's to set; an order always starts
+        // life as "ordered".
+        await createTestOrder({
+          patientId: orderingTests.patientId,
+          doctorId: doctor.id,
+          appointmentId: orderingTests.id,
+          items,
+          priority: values.priority,
+          clinicalNote: values.note.trim(),
+        }).unwrap();
+        setOrderingTests(null);
+        flash(`Ordered ${items.length} test(s)`);
+      } catch (err) {
+        setOrderError(apiError(err, 'Could not place the order'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
   const openOrder = (a: Appointment) => {
-    setOrderSel(new Set());
-    setOrderPriority('routine');
-    setOrderNote('');
+    orderFormik.resetForm();
     setTestQuery('');
     setOrderingTests(a);
   };
-  const toggleTest = (id: string) =>
-    setOrderSel((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  const saveOrder = async () => {
-    if (!orderingTests || !doctor || orderSel.size === 0) return;
-    const items = tests
-      .filter((t) => orderSel.has(t.id))
-      .map((t) => ({ testId: t.id, name: t.name, price: t.price }));
-    setOrderError('');
-    try {
-      // Status and timestamps are the server's to set; an order always starts
-      // life as "ordered".
-      await createTestOrder({
-        patientId: orderingTests.patientId,
-        doctorId: doctor.id,
-        appointmentId: orderingTests.id,
-        items,
-        priority: orderPriority,
-        clinicalNote: orderNote.trim(),
-      }).unwrap();
-      setOrderingTests(null);
-      flash(`Ordered ${items.length} test(s)`);
-    } catch (err) {
-      setOrderError(apiError(err, 'Could not place the order'));
-    }
+  const toggleTest = (id: string) => {
+    const next = orderFormik.values.testIds.includes(id)
+      ? orderFormik.values.testIds.filter((t) => t !== id)
+      : [...orderFormik.values.testIds, id];
+    orderFormik.setFieldValue('testIds', next);
   };
-  const orderTotal = tests.filter((t) => orderSel.has(t.id)).reduce((s, t) => s + t.price, 0);
+  const orderTotal = tests.filter((t) => orderFormik.values.testIds.includes(t.id)).reduce((s, t) => s + t.price, 0);
 
   return (
     <DashboardShell role={session.user.role} userName={session.user.name} title="Appointments" subtitle="Your patient appointments">
@@ -487,7 +487,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               {tests
                 .filter((t) => !testQuery || t.name.toLowerCase().includes(testQuery.toLowerCase()) || t.category.toLowerCase().includes(testQuery.toLowerCase()))
                 .map((t) => {
-                  const checked = orderSel.has(t.id);
+                  const checked = orderFormik.values.testIds.includes(t.id);
                   return (
                     <label key={t.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer border ${checked ? 'border-cyan-400 bg-cyan-50' : 'border-transparent hover:bg-slate-50'}`}>
                       <input type="checkbox" checked={checked} onChange={() => toggleTest(t.id)} className="w-4 h-4 accent-cyan-600" />
@@ -505,18 +505,20 @@ export function DoctorAppointments({ session }: RoleViewProps) {
               <div className="flex items-center gap-3">
                 <label className="text-sm font-medium text-slate-700">Priority</label>
                 <select
-                  value={orderPriority}
-                  onChange={(e) => setOrderPriority(e.target.value as 'routine' | 'urgent')}
+                  name="priority"
+                  value={orderFormik.values.priority}
+                  onChange={orderFormik.handleChange}
                   className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
                 >
                   <option value="routine">Routine</option>
                   <option value="urgent">Urgent</option>
                 </select>
-                <span className="ml-auto text-sm text-slate-500">{orderSel.size} selected · ₹{orderTotal}</span>
+                <span className="ml-auto text-sm text-slate-500">{orderFormik.values.testIds.length} selected · ₹{orderTotal}</span>
               </div>
               <input
-                value={orderNote}
-                onChange={(e) => setOrderNote(e.target.value)}
+                name="note"
+                value={orderFormik.values.note}
+                onChange={orderFormik.handleChange}
                 placeholder="Clinical note / indication (optional)"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:border-cyan-500"
               />
@@ -528,11 +530,11 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   Cancel
                 </button>
                 <button
-                  onClick={saveOrder}
-                  disabled={orderSel.size === 0}
+                  onClick={() => orderFormik.submitForm()}
+                  disabled={orderFormik.values.testIds.length === 0 || orderFormik.isSubmitting}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
-                  Place Order
+                  {orderFormik.isSubmitting ? <Spinner size="sm" label="Placing…" /> : 'Place Order'}
                 </button>
               </div>
             </div>

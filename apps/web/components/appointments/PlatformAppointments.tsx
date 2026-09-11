@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Formik, Form } from 'formik';
+import { Formik, Form, useFormik } from 'formik';
 import * as Yup from 'yup';
 import {
   CalendarDays, Plus, Trash2, AlertTriangle, Search,
@@ -111,8 +111,6 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const selectedHospitalId = searchParams.get('h') ?? '';
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
-  const [reDate, setReDate] = useState('');
-  const [reTime, setReTime] = useState('');
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
@@ -171,6 +169,26 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   // Which slots the doctor already has taken on that date. Asked of the API
   // rather than derived from a page of appointments, which would miss conflicts
   // that happen to be on another page.
+  const rescheduleFormik = useFormik({
+    initialValues: { date: '', time: '' },
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!rescheduling || !values.date || !values.time) { setSubmitting(false); return; }
+      setError('');
+      try {
+        await updateAppointment({ id: rescheduling.id, hospitalId: rescheduling.hospitalId, body: { date: values.date, time: values.time } }).unwrap();
+        setRescheduling(null);
+        refetch();
+        toast.success('Appointment rescheduled');
+      } catch (err) {
+        setError(apiError(err, 'Could not reschedule the appointment'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
+  const reDate = rescheduleFormik.values.date;
+  const reTime = rescheduleFormik.values.time;
+
   const { data: availability } = useGetDoctorAvailabilityQuery(
     { doctorId: rescheduling?.doctorId ?? '', date: reDate, hospitalId: rescheduling?.hospitalId },
     { skip: !rescheduling || !reDate },
@@ -187,22 +205,8 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   );
 
   const openReschedule = (a: Appointment) => {
-    setReDate(a.date);
-    setReTime(a.time);
+    rescheduleFormik.setValues({ date: a.date, time: a.time });
     setRescheduling(a);
-  };
-
-  const saveReschedule = async () => {
-    if (!rescheduling || !reDate || !reTime) return;
-    setError('');
-    try {
-      await updateAppointment({ id: rescheduling.id, hospitalId: rescheduling.hospitalId, body: { date: reDate, time: reTime } }).unwrap();
-      setRescheduling(null);
-      refetch();
-      toast.success('Appointment rescheduled');
-    } catch (err) {
-      setError(apiError(err, 'Could not reschedule the appointment'));
-    }
   };
 
   const confirmDelete = async () => {
@@ -418,7 +422,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                 <Calendar
                   mode="single"
                   selected={reDate ? new Date(`${reDate}T00:00:00`) : undefined}
-                  onSelect={(d) => { setReDate(d ? toDateStr(d) : ''); setReTime(''); }}
+                  onSelect={(d) => rescheduleFormik.setValues({ date: d ? toDateStr(d) : '', time: '' })}
                   disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
                   className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
                 />
@@ -440,7 +444,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                         ? 'bg-red-50 text-red-400 border-red-200 line-through cursor-not-allowed'
                         : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
                       return (
-                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => setReTime(slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
+                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => rescheduleFormik.setFieldValue('time', slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
                           {slot}
                         </button>
                       );
@@ -450,8 +454,10 @@ export function PlatformAppointments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setRescheduling(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-              <button onClick={saveReschedule} disabled={!reDate || !reTime} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">Reschedule</button>
+              <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">Cancel</button>
+              <button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
+              </button>
             </div>
           </div>
         </div>
