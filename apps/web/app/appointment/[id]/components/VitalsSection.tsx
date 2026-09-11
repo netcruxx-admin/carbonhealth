@@ -223,7 +223,7 @@ function NewVitalsRow({
           <button
             type="button"
             onClick={() => formik.submitForm()}
-            disabled={formik.isSubmitting}
+            disabled={formik.isSubmitting || !formik.dirty}
             title="Record vitals"
             className="p-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded transition disabled:opacity-50"
           >
@@ -267,7 +267,7 @@ function EditVitalsForm({
         }
       }}
     >
-      {({ isSubmitting }) => (
+      {({ isSubmitting, dirty }) => (
         <Form className="grid sm:grid-cols-2 gap-4">
           <VitalsFormFields />
           {error && (
@@ -279,7 +279,7 @@ function EditVitalsForm({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !dirty}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
             >
               {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
