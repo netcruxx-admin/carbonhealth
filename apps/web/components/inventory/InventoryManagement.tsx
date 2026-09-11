@@ -312,7 +312,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting }) => (
+              {({ isSubmitting, dirty }) => (
                 <Form className="grid gap-3">
                   <FormField name="quantity" label="Quantity" type="number" min="1" placeholder="Units to add" required />
                   <FormField name="lotNumber" label="Lot Number" placeholder="e.g. LOT-2024-001" />
@@ -329,7 +329,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || isRestocking}
+                      disabled={isSubmitting || !dirty || isRestocking}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting || isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
@@ -374,7 +374,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting }) => (
+              {({ isSubmitting, dirty }) => (
                 <Form className="grid gap-3">
                   <FormField
                     name="movementType"
@@ -395,7 +395,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || isAdjusting}
+                      disabled={isSubmitting || !dirty || isAdjusting}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting || isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}

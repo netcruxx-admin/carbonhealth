@@ -110,7 +110,7 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
               <button
                 type="button"
                 onClick={() => formik.submitForm()}
-                disabled={formik.isSubmitting}
+                disabled={formik.isSubmitting || !formik.dirty}
                 title="Save"
                 className="p-1.5 rounded text-green-600 hover:bg-green-50 transition"
               >
@@ -259,7 +259,7 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
             <button
               type="button"
               onClick={() => addFormik.submitForm()}
-              disabled={addFormik.isSubmitting}
+              disabled={addFormik.isSubmitting || !addFormik.dirty}
               className="bg-cyan-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-cyan-700 transition disabled:opacity-60"
             >
               {addFormik.isSubmitting ? 'Adding…' : 'Add'}
