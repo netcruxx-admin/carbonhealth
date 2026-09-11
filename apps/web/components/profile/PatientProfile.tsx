@@ -96,7 +96,7 @@ const bloodGroupOptions = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map
 
 /** Inner component so it can use both useFormikContext and its own useState. */
 function WizardContent({ isSaving }: { isSaving: boolean }) {
-  const { setFieldTouched, validateForm, isSubmitting } = useFormikContext<FormValues>();
+  const { setFieldTouched, validateForm, isSubmitting, dirty } = useFormikContext<FormValues>();
   const [currentStep, setCurrentStep] = useState(1);
 
   const handleNext = async () => {
@@ -252,7 +252,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
           <button
             key="submit"
             type="submit"
-            disabled={isSubmitting || isSaving}
+            disabled={isSubmitting || isSaving || !dirty}
             className="inline-flex items-center justify-center gap-2 flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white font-semibold rounded-lg hover:shadow-lg transition disabled:opacity-50"
           >
             {isSubmitting || isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save Profile'}
