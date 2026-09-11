@@ -188,9 +188,11 @@ export interface Payment {
   hospitalId?: string;
   appointmentId?: string | null;
   medicationOrderId?: string | null;
+  injectionOrderId?: string | null;
+  testOrderId?: string | null;
   patientId: string;
   amount: number;
-  paymentType: 'consultation' | 'pharmacy' | 'lab';
+  paymentType: 'consultation' | 'pharmacy' | 'lab' | 'injectable';
   status: 'pending' | 'completed' | 'failed';
   paymentMethod: string;
   gatewayOrderId?: string | null;
@@ -227,6 +229,32 @@ export interface PharmacyBillingSummary {
   cashTotal: number;
   upiTotal: number;
   cardTotal: number;
+  billCount: number;
+}
+
+export interface InjectableLabBillingRow {
+  paymentId: string;
+  invoiceNumber: string;
+  createdAt: string;
+  patientName: string;
+  patientPhone: string;
+  category: 'injectable' | 'lab';
+  description: string;
+  quantity: number;
+  amount: number;
+  status: string;
+  paymentMethod: string;
+}
+
+export interface InjectableLabBillingSummary {
+  date: string;
+  rows: InjectableLabBillingRow[];
+  total: number;
+  cashTotal: number;
+  upiTotal: number;
+  cardTotal: number;
+  /** Billed but not yet collected — what the desk still has to chase. */
+  pendingTotal: number;
   billCount: number;
 }
 

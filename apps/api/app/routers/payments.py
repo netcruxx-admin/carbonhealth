@@ -316,6 +316,117 @@ def get_pharmacy_billing_summary(
     )
 
 
+@router.get("/injectable-lab-billing", response_model=schemas.InjectableLabBillingSummary)
+def get_injectable_lab_billing_summary(
+    date: Optional[str] = Query(default=None, description="YYYY-MM-DD, defaults to today"),
+    date_from: Optional[str] = Query(default=None, alias="dateFrom"),
+    date_to: Optional[str] = Query(default=None, alias="dateTo"),
+    db: Session = Depends(get_db),
+    user: models.User = Depends(get_current_user),
+    _scope: str = Depends(require_permission("payments.read")),
+    tenant_id: str = Depends(get_tenant_id),
+):
+    """Day- or range-level billing summary combining injectables and lab tests.
+
+    Both bill automatically, the way a consultation does: administering a shot
+    or completing a test order raises a `pending` Payment with no method yet,
+    and the front desk collects and records it from here — nurses and lab
+    staff never handle money. `pending_total` is what the desk still has to
+    chase before close of day, the same number the consultation report keeps.
+    """
+    import datetime as dt
+
+    report_date = date or date_from or dt.date.today().isoformat()
+
+    query = (
+        scoped(db, models.Payment, tenant_id)
+        .filter(models.Payment.payment_type.in_(("injectable", "lab")))
+    )
+    query = _billing_date_filter(query, date, date_from, date_to)
+    payments = query.order_by(models.Payment.created_at.asc()).all()
+
+    patient_ids = list({p.patient_id for p in payments})
+    patient_map = patient_display(db, patient_ids, tenant_id)
+
+    injection_ids = [p.injection_order_id for p in payments if p.injection_order_id]
+    injection_map: dict = {}
+    if injection_ids:
+        injection_orders = (
+            scoped(db, models.InjectionOrder, tenant_id)
+            .filter(models.InjectionOrder.id.in_(injection_ids))
+            .all()
+        )
+        injection_map = {o.id: o for o in injection_orders}
+
+    test_ids = [p.test_order_id for p in payments if p.test_order_id]
+    test_map: dict = {}
+    if test_ids:
+        test_orders = (
+            scoped(db, models.TestOrder, tenant_id)
+            .filter(models.TestOrder.id.in_(test_ids))
+            .all()
+        )
+        test_map = {o.id: o for o in test_orders}
+
+    rows: list[schemas.InjectableLabBillingRow] = []
+    total = cash_total = upi_total = card_total = pending_total = 0.0
+
+    for payment in payments:
+        patient_name, patient_phone = patient_map.get(payment.patient_id, ("", ""))
+
+        if payment.payment_type == "injectable":
+            order = injection_map.get(payment.injection_order_id or "")
+            description = (order.injectable_name if order else "") or "Injectable"
+            if order and order.dose:
+                description = f"{description} ({order.dose})"
+            quantity = (order.quantity if order else 1) or 1
+        else:
+            order = test_map.get(payment.test_order_id or "")
+            items = (order.items if order else []) or []
+            description = ", ".join(i.get("name", "") for i in items) or "Lab tests"
+            quantity = len(items) or 1
+
+        rows.append(schemas.InjectableLabBillingRow(
+            payment_id=payment.id,
+            invoice_number=payment.id.replace("pay-", "INV-").upper(),
+            created_at=payment.created_at,
+            patient_name=patient_name,
+            patient_phone=patient_phone,
+            category=payment.payment_type,
+            description=description,
+            quantity=quantity,
+            amount=payment.amount,
+            status=payment.status or "",
+            payment_method=payment.payment_method or "",
+        ))
+
+        # Only money actually collected counts toward the day's takings; the
+        # rest is what the desk still has to collect.
+        if (payment.status or "") != "completed":
+            pending_total += payment.amount
+            continue
+
+        total += payment.amount
+        method = (payment.payment_method or "").lower()
+        if method == "cash":
+            cash_total += payment.amount
+        elif method in ("upi", "qr"):
+            upi_total += payment.amount
+        elif method == "card":
+            card_total += payment.amount
+
+    return schemas.InjectableLabBillingSummary(
+        date=report_date,
+        rows=rows,
+        total=round(total, 2),
+        cash_total=round(cash_total, 2),
+        upi_total=round(upi_total, 2),
+        card_total=round(card_total, 2),
+        pending_total=round(pending_total, 2),
+        bill_count=len(rows),
+    )
+
+
 @router.get("/{payment_id}/invoice", response_model=schemas.InvoiceOut)
 def get_invoice(
     payment_id: str,
@@ -377,6 +488,44 @@ def get_invoice(
             unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
             amount=payment.amount,
         ))
+    elif payment.payment_type == "injectable" and payment.injection_order_id:
+        order = (
+            scoped(db, models.InjectionOrder, tenant_id)
+            .filter(models.InjectionOrder.id == payment.injection_order_id)
+            .first()
+        )
+        quantity = (order.quantity or 1) if order else 1
+        description = (order.injectable_name if order else "") or "Injectable"
+        if order and order.dose:
+            description = f"{description} ({order.dose})"
+        lines.append(schemas.InvoiceLine(
+            description=description,
+            quantity=quantity,
+            unit_price=round(payment.amount / quantity, 2) if quantity else payment.amount,
+            amount=payment.amount,
+        ))
+    elif payment.payment_type == "lab" and payment.test_order_id:
+        order = (
+            scoped(db, models.TestOrder, tenant_id)
+            .filter(models.TestOrder.id == payment.test_order_id)
+            .first()
+        )
+        items = (order.items if order else []) or []
+        # One line per test, using each item's own price as captured on the
+        # order — the multi-line case the shape above was always meant for.
+        for item in items:
+            price = float(item.get("price") or 0)
+            lines.append(schemas.InvoiceLine(
+                description=item.get("name", "") or "Lab test",
+                quantity=1,
+                unit_price=price,
+                amount=price,
+            ))
+        if not lines:
+            lines.append(schemas.InvoiceLine(
+                description="Lab tests", quantity=1,
+                unit_price=payment.amount, amount=payment.amount,
+            ))
     else:
         description = "Consultation"
         if payment.appointment_id:

@@ -42,6 +42,9 @@ interface PrintSheetProps {
    *  by a "View" link (the lab report) leaves this off and prints only when the
    *  reader clicks the button. `?autoprint=0` overrides it off either way. */
   autoPrint?: boolean;
+  /** Always render plain mode, even when the hospital has a letterhead. For
+   *  bills that must never carry it regardless of hospital configuration. */
+  forcePlain?: boolean;
   children: React.ReactNode;
 }
 
@@ -65,7 +68,7 @@ const DEFAULT_MARGINS: LetterheadMargins = { top: 48, bottom: 32, left: 18, righ
  * suppressed by `?autoprint=0`. Without `autoPrint` the sheet just renders and
  * the reader prints from the button.
  */
-export function PrintSheet({ header, docLabel, docNumber, ready = true, autoPrint = false, children }: PrintSheetProps) {
+export function PrintSheet({ header, docLabel, docNumber, ready = true, autoPrint = false, forcePlain = false, children }: PrintSheetProps) {
   const router = useRouter();
   const firedRef = useRef(false);
 
@@ -132,7 +135,7 @@ export function PrintSheet({ header, docLabel, docNumber, ready = true, autoPrin
         </button>
       </div>
 
-      {header.letterheadUrl ? (
+      {header.letterheadUrl && !forcePlain ? (
         <LetterheadFrame
           url={header.letterheadUrl}
           margins={header.letterheadMargins ?? DEFAULT_MARGINS}
