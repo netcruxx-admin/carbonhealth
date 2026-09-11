@@ -317,7 +317,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ setFieldValue, isSubmitting }) => (
+              {({ setFieldValue, isSubmitting, dirty }) => (
                 <Form className="grid gap-4">
                   <FormField
                     name="patientId"
@@ -386,7 +386,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || isCreating}
+                      disabled={isSubmitting || !dirty || isCreating}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting || isCreating ? <Spinner size="sm" label="Ordering…" /> : 'Order Injection'}
@@ -435,7 +435,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting }) => (
+              {({ isSubmitting, dirty }) => (
                 <Form>
                   <div className="grid gap-3 mb-4">
                     <FormField name="site" label="Injection site" required placeholder="e.g. Left deltoid, Right thigh, IV line A" autoFocus />
@@ -457,7 +457,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || isGiving}
+                      disabled={isSubmitting || !dirty || isGiving}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting || isGiving ? <Spinner size="sm" label="Saving…" /> : 'Mark Given'}

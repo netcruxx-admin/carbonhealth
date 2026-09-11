@@ -435,7 +435,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ setFieldValue, isSubmitting }) => (
+              {({ setFieldValue, isSubmitting, dirty }) => (
                 <Form className="grid gap-4">
                   <FormField
                     name="patientId"
@@ -503,7 +503,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || isCreating}
+                      disabled={isSubmitting || !dirty || isCreating}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting || isCreating ? <Spinner size="sm" label="Creating…" /> : 'Create Order'}
@@ -760,7 +760,7 @@ export function MedicationOrders({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting }) => (
+              {({ isSubmitting, dirty }) => (
                 <Form>
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold text-slate-900">Record Administration</h3>
@@ -789,7 +789,10 @@ export function MedicationOrders({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      // Notes-only submission is a legitimate no-touch click (nothing
+                      // to fill in); a required injection site is not, so that route
+                      // still needs a real edit before Mark Administered lights up.
+                      disabled={isSubmitting || (['IV', 'IM', 'SC'].includes(administerOrder.route) && !dirty)}
                       className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Mark Administered'}
