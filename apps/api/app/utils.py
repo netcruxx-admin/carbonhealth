@@ -346,6 +346,45 @@ def attach_visit_stats(db: Session, items: Sequence) -> None:
         item.next_visit = upcoming.get(item.id)
 
 
+def attach_active_pregnancy(db: Session, items: Sequence) -> None:
+    """Fill active_pregnancy on already-serialized patients.
+
+    One query over the ids on this page, the same shape as attach_visit_stats.
+    Without this the patient chart — and the patient list — had no way to know
+    a patient was pregnant short of a separate trip to /pregnancies, which is
+    exactly the disconnect between the patient record and the pregnancy module
+    that let three screens each collect their own LMP with nothing reconciling
+    them. A patient carries at most one active pregnancy in practice; if more
+    than one row is ever open, the most recently created one wins.
+    """
+    # Imported here, not at module level: utils is imported very early (by
+    # audit.py, which schemas.py's own dependency chain reaches), so a
+    # top-level `from . import schemas` here is a circular import.
+    from . import schemas
+
+    ids = [item.id for item in items]
+    if not ids:
+        return
+    rows = (
+        db.query(models.PregnancyRecord)
+        .filter(
+            models.PregnancyRecord.patient_id.in_(ids),
+            models.PregnancyRecord.status == "active",
+        )
+        .order_by(models.PregnancyRecord.created_at)
+        .all()
+    )
+    by_patient: dict[str, models.PregnancyRecord] = {}
+    for row in rows:
+        # Rows arrive oldest-first, so the last one seen per patient is the newest.
+        by_patient[row.patient_id] = row
+    for item in items:
+        record = by_patient.get(item.id)
+        item.active_pregnancy = (
+            schemas.ActivePregnancySummary.model_validate(record) if record else None
+        )
+
+
 def appointments_with_vitals(db: Session, appointment_ids: Iterable[str]) -> set[str]:
     """Which of these appointments already have vitals recorded, in one query."""
     ids = {aid for aid in appointment_ids if aid}

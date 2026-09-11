@@ -37,13 +37,20 @@ def _unique(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:8]}"
 
 
+def _unique_phone() -> str:
+    # Phone is unique per tenant now (see uq_users_tenant_phone) — a fixed
+    # literal reused by every call in this file would collide with itself
+    # inside hospital_a, which several tests share across multiple registrations.
+    return f"9{uuid.uuid4().int % 10**9:09d}"
+
+
 def _register(client, tenant, aadhaar: str = "", **overrides) -> dict:
     """A patient signing themselves up, with the details a person would give."""
     body = {
         "name": "Self Registered",
         "email": f"{_unique('self')}@patient.test",
         "password": PROVISIONED_PASSWORD,
-        "phone": "9000000001",
+        "phone": _unique_phone(),
         "role": "patient",
         "dateOfBirth": "1992-04-17",
         "gender": "female",
@@ -66,7 +73,7 @@ def _add_at_desk(tenant, aadhaar: str = "", **overrides):
         "email": f"{_unique('desk')}@patient.test",
         "password": PROVISIONED_PASSWORD,
         "role": "patient",
-        "phone": "9000000002",
+        "phone": _unique_phone(),
         "dateOfBirth": "1988-02-03",
         "gender": "male",
         "bloodGroup": "B+",

@@ -19,6 +19,7 @@ from ..auth import (
 from ..authz import effective_permissions
 from ..config import settings
 from ..database import get_db
+from ..identity import normalise_phone
 from ..tenancy import resolve_public_tenant
 from ..utils import assert_aadhaar_unused, new_id, now_iso
 
@@ -66,13 +67,13 @@ def _build_response(
     )
 
 
-def _throttle_login(db: Session, email: str, ip: str) -> None:
+def _throttle_login(db: Session, identifier: str, ip: str) -> None:
     """Refuse the attempt when this address has been failing too often.
 
     Counted off the audit trail rather than a counter table: every failed
-    sign-in is already recorded there with its address and the email tried, so
-    the lockout rests on the same evidence an investigator would read, and there
-    is no second source of truth to drift.
+    sign-in is already recorded there with its address and the identifier
+    tried (email or phone), so the lockout rests on the same evidence an
+    investigator would read, and there is no second source of truth to drift.
 
     Both thresholds are scoped to the source address on purpose. A per-account
     limit that ignored the address would let anyone lock a real user out of
@@ -97,7 +98,7 @@ def _throttle_login(db: Session, email: str, ip: str) -> None:
             detail="Too many failed sign-in attempts. Please try again later.",
             headers={"Retry-After": str(settings.login_failure_window_minutes * 60)},
         )
-    per_account = recent.filter(models.AuditLog.detail == email).count()
+    per_account = recent.filter(models.AuditLog.detail == identifier).count()
     if per_account >= settings.login_max_failures_per_account:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -130,15 +131,19 @@ def register(
     purposes = consent_lib.assert_required_given(db, hospital, body.consents)
 
     # Email is unique per tenant, so the check is scoped to this hospital.
-    existing = (
-        db.query(models.User)
-        .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
-        .first()
-    )
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+    # Only meaningful when an email was actually given — email is optional now
+    # (see /auth login), and every account with a blank one must be able to
+    # coexist with every other blank-email account.
+    if body.email:
+        existing = (
+            db.query(models.User)
+            .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
+            .first()
         )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+            )
 
     user = models.User(
         id=new_id("user"),
@@ -218,44 +223,86 @@ def login(
     tenant_id: str = Depends(resolve_public_tenant),
 ):
     ip = _client_ip(request)
+    identifier = body.identifier.strip()
     # Before the password is even checked: a throttled attempt must not be a
     # free oracle for whether the account exists.
-    _throttle_login(db, body.email, ip)
-    # Prefer a user in the resolved tenant; fall back to a platform superadmin
-    # (who belongs to no hospital and can sign in from any origin).
-    user = (
-        db.query(models.User)
-        .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
-        .first()
-    )
-    if user is None:
-        user = (
-            db.query(models.User)
-            .filter(
-                models.User.hospital_id.is_(None),
-                models.User.role == "superadmin",
-                models.User.email == body.email,
-            )
-            .first()
-        )
+    _throttle_login(db, identifier, ip)
 
-    if user is None:
+    # An "@" is always an email, never a valid phone digit, so this is
+    # unambiguous — no need to try both and see what sticks.
+    if "@" in identifier:
+        lookup_column = models.User.email
+        lookup_value = identifier
+    else:
+        lookup_column = models.User.phone
+        lookup_value = normalise_phone(identifier)
+
+    # An identifier that isn't a real email and doesn't normalise to a real
+    # phone number matches nothing — same outcome as a well-formed one that
+    # simply isn't on file, and for the same reason: neither should tell the
+    # caller which kind of identifier they got wrong.
+    user = None
+    phone_ambiguous = False
+    if lookup_value:
+        # Prefer a user in the resolved tenant; fall back to a platform
+        # superadmin (who belongs to no hospital and can sign in from any
+        # origin).
+        #
+        # Unlike email, phone is not unique per tenant — a patient identified
+        # by a relative (see `relation_type`: W/O, D/O, B/O) often shares a
+        # household or parent's number with another account on purpose, and
+        # registration must never refuse that. So more than one tenant match
+        # here is a real possibility, not a bug, and phone simply cannot be
+        # used to sign in to either of those accounts until it is unique
+        # again — fetching every match (not just the first) is what lets us
+        # tell that case apart from an ordinary single match.
+        tenant_matches = (
+            db.query(models.User)
+            .filter(models.User.hospital_id == tenant_id, lookup_column == lookup_value)
+            .all()
+        )
+        if lookup_column is models.User.phone and len(tenant_matches) > 1:
+            phone_ambiguous = True
+        elif tenant_matches:
+            user = tenant_matches[0]
+        if user is None and not phone_ambiguous:
+            user = (
+                db.query(models.User)
+                .filter(
+                    models.User.hospital_id.is_(None),
+                    models.User.role == "superadmin",
+                    lookup_column == lookup_value,
+                )
+                .first()
+            )
+
+    if phone_ambiguous:
         audit.record_action("login_failed")
-        audit.record_subject("user", "", detail=body.email)
+        audit.record_subject("user", "", detail=identifier)
         if tenant_id:
             audit.record_tenant(tenant_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No account found with this email address.",
+            detail="More than one account uses this phone number. Please sign in with your email instead.",
+        )
+
+    if user is None:
+        audit.record_action("login_failed")
+        audit.record_subject("user", "", detail=identifier)
+        if tenant_id:
+            audit.record_tenant(tenant_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No account found with this email or phone number.",
         )
 
     if not verify_password(body.password, user.password):
         # Failed sign-ins are the trail's early-warning signal — a burst of them
         # against one account is what a breach looks like before it succeeds.
-        # The email is recorded because that is what was tried; the password
-        # never is, here or anywhere else in the trail.
+        # The identifier is recorded because that is what was tried; the
+        # password never is, here or anywhere else in the trail.
         audit.record_action("login_failed")
-        audit.record_subject("user", user.id, detail=body.email)
+        audit.record_subject("user", user.id, detail=identifier)
         if tenant_id:
             audit.record_tenant(tenant_id)
         raise HTTPException(
@@ -502,11 +549,16 @@ def forgot_password(
 
     # Look up user scoped to this tenant.  Superadmin (no hospital) is excluded
     # here — the forgot-password page is hidden on the platform root anyway.
-    user = (
-        db.query(models.User)
-        .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
-        .first()
-    )
+    # An empty email is never a lookup key — email is optional now (see
+    # /auth login), so a blank submission would otherwise match whichever
+    # blank-email account happens to be first and hand them a reset link.
+    user = None
+    if body.email.strip():
+        user = (
+            db.query(models.User)
+            .filter(models.User.hospital_id == tenant_id, models.User.email == body.email)
+            .first()
+        )
 
     audit.record_action("forgot_password_requested")
     if tenant_id:

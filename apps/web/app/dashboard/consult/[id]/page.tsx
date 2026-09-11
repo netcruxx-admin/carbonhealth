@@ -278,16 +278,28 @@ export default function ConsultRoomPage() {
 
         {/* Side panel */}
         <div className="hidden md:flex w-80 flex-col bg-slate-800 border-l border-slate-700">
-          <div className="flex border-b border-slate-700">
-            <button onClick={() => setTab('chat')} className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${tab === 'chat' ? 'text-white border-b-2 border-cyan-400' : 'text-slate-400'}`}>
+          <nav className="flex border-b border-slate-700" aria-label="Call side panel">
+            <button
+              onClick={() => setTab('chat')}
+              aria-current={tab === 'chat' ? 'page' : undefined}
+              className={`flex-1 py-3 text-sm font-medium border-b-2 -mb-px transition flex items-center justify-center gap-2 ${
+                tab === 'chat' ? 'border-cyan-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+              }`}
+            >
               <MessageSquare className="w-4 h-4" /> Chat
             </button>
             {amDoctor && (
-              <button onClick={() => setTab('notes')} className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${tab === 'notes' ? 'text-white border-b-2 border-cyan-400' : 'text-slate-400'}`}>
+              <button
+                onClick={() => setTab('notes')}
+                aria-current={tab === 'notes' ? 'page' : undefined}
+                className={`flex-1 py-3 text-sm font-medium border-b-2 -mb-px transition flex items-center justify-center gap-2 ${
+                  tab === 'notes' ? 'border-cyan-400 text-white' : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                }`}
+              >
                 <FileText className="w-4 h-4" /> Notes
               </button>
             )}
-          </div>
+          </nav>
 
           {tab === 'chat' ? (
             <>

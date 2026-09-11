@@ -119,16 +119,20 @@ export function PlatformAppointments({ session }: RoleViewProps) {
   const [error, setError] = useState('');
   const [vitalsError, setVitalsError] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  // Today by default, same as every hospital's own appointment board — Clear
+  // opens this cross-hospital view back up to every date.
+  const [date, setDate] = useState(todayStr);
 
   // Hospital, status, search and paging are all applied by the API. Patient and
   // doctor names arrive resolved on each row, so this screen no longer pulls
   // every patient and doctor on the platform to turn two ids into two names.
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${sortToken}` });
+  const table = useServerTable({ filterKey: `${selectedHospitalId}|${statusFilter}|${date}|${sortToken}` });
   const { data: appointmentPage, isLoading, refetch } = useGetSuperadminAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     hospitalId: selectedHospitalId || undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
+    date: date || undefined,
     sort: sortToken,
     limit: table.limit,
     offset: table.offset,
@@ -247,13 +251,26 @@ export function PlatformAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          />
+          {date && (
+            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <p className="text-sm text-slate-500">
             {totalAppointments} appointment{totalAppointments !== 1 ? 's' : ''}
-            {(selectedHospitalId || table.search || statusFilter !== 'all') && <span className="text-slate-400"> (filtered)</span>}
+            {(selectedHospitalId || table.search || statusFilter !== 'all' || date) && <span className="text-slate-400"> (filtered)</span>}
           </p>
           {hasPermission(session, 'appointments.create') && (
             <button
@@ -269,7 +286,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
         ) : appointments.length === 0 ? (
           <div className="py-16 text-center">
             <CalendarDays className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-            <p className="text-slate-500">No appointments found.</p>
+            <p className="text-slate-500">No appointments match your filters.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

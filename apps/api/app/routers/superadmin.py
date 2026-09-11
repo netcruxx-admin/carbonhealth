@@ -115,6 +115,7 @@ def all_appointments(
     response: Response,
     hospital_id: Optional[str] = Query(default=None, alias="hospitalId"),
     status_filter: Optional[str] = Query(default=None, alias="status"),
+    date: Optional[str] = Query(default=None),
     sort: str = Query(default=DEFAULT_APPOINTMENT_SORT),
     params: ListQuery = Depends(list_params),
     db: Session = Depends(get_db),
@@ -125,6 +126,8 @@ def all_appointments(
         query = query.filter(models.Appointment.hospital_id == hospital_id)
     if status_filter:
         query = query.filter(models.Appointment.status == status_filter)
+    if date:
+        query = query.filter(models.Appointment.date == date)
     # Same search as the tenant list: patient name/phone or doctor name, which
     # is what the platform table shows and therefore what a superadmin types.
     query = appointment_name_search(query, params.q)

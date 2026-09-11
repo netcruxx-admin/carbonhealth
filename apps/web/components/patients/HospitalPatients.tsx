@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, UserRound, UserPlus, Pencil, Trash2, Eye } from 'lucide-react';
+import { Search, UserRound, UserPlus, Pencil, Trash2, Eye, Baby } from 'lucide-react';
 import { DashboardShell } from '@/components/DashboardShell';
 import { ExportButton } from '@/components/ExportButton';
 import { TablePagination } from '@/components/TablePagination';
@@ -50,6 +50,9 @@ interface PatientRow {
   appointments: number;
   lastVisit: string | null;
   nextVisit: string | null;
+  /** Set when the patient has an active pregnancy — drives the badge next to
+   *  the name. Absent (not just false) when the caller lacks pregnancies.read. */
+  activePregnancy: Patient['activePregnancy'];
   /** Original Patient object, used by the admin Actions column. */
   _raw: Patient;
 }
@@ -65,7 +68,17 @@ interface Column {
 function NameCell({ row, sub }: { row: PatientRow; sub?: string }) {
   return (
     <>
-      <p className="font-medium text-slate-900">{row.name}</p>
+      <p className="font-medium text-slate-900 flex items-center gap-1.5">
+        {row.name}
+        {row.activePregnancy && (
+          <span
+            title={`Active pregnancy · G${row.activePregnancy.gravida}P${row.activePregnancy.para}`}
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-100 text-cyan-700"
+          >
+            <Baby className="w-2.5 h-2.5" /> Pregnant
+          </span>
+        )}
+      </p>
       {row.relationLine && <p className="text-xs text-slate-500">{row.relationLine}</p>}
       {sub && <p className="text-xs text-slate-500">{sub}</p>}
     </>
@@ -181,6 +194,7 @@ function toRow(patient: Patient): PatientRow {
     appointments: patient.visitCount ?? 0,
     lastVisit: patient.lastVisit ?? null,
     nextVisit: patient.nextVisit ?? null,
+    activePregnancy: patient.activePregnancy,
     _raw: patient,
   };
 }

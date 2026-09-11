@@ -42,7 +42,9 @@ export type FormValues = typeof initialValues;
 
 export const accountSchema = Yup.object({
   name: Yup.string().trim().required('Full name is required'),
-  email: Yup.string().email('Please enter a valid email').required('Email is required'),
+  // Not required — phone (required just below) is already a way to sign in
+  // on its own (see /auth login) — but still validated when given.
+  email: Yup.string().trim().email('Please enter a valid email'),
   phone: Yup.string()
     .matches(PHONE_REGEX, 'Enter a valid 10-digit mobile number')
     .required('Phone number is required'),

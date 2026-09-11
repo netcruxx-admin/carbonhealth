@@ -186,7 +186,9 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [status, setStatus] = useState<'all' | Appointment['status']>(initialStatus);
   const [deptId, setDeptId] = useState('all');
   const [query, setQuery] = useState('');
-  const [date, setDate] = useState('');
+  // Today by default — this is the day's board, not the full history; Clear
+  // (next to the date picker below) opens it back up to every date.
+  const [date, setDate] = useState(todayStr);
   const [page, setPage] = useState(1);
   const { sort, toggle, token: sortToken } = useAppointmentSort();
 

@@ -73,7 +73,9 @@ export function DoctorAppointments({ session }: RoleViewProps) {
   const canManage = hasPermission(session, 'appointments.manage');
 
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
-  const [date, setDate] = useState('');
+  // Today by default — this is the day's work queue, not a full history; the
+  // date picker right below still opens it up to any other day.
+  const [date, setDate] = useState(todayStr);
   const { sort, toggle, token: sortToken } = useAppointmentSort();
   const table = useServerTable({ pageSize: PAGE_SIZE, filterKey: `${status}|${date}|${sortToken}` });
 

@@ -18,10 +18,13 @@ const schema = Yup.object({
   medicalHistory: Yup.string().trim(),
   surgicalHistory: Yup.string().trim(),
   familyHistory: Yup.string().trim(),
-  lmp: Yup.string(),
   menstrualHistory: Yup.string().trim(),
   maritalStatus: Yup.string().trim(),
   obstetricHistory: Yup.string().trim(),
+  pogByScan: Yup.string().trim(),
+  perAbdomen: Yup.string().trim(),
+  perSpeculum: Yup.string().trim(),
+  perVaginum: Yup.string().trim(),
 }).test('at-least-one', 'Fill in at least one of these', (values) =>
   Object.values(values).some((v) => (v ?? '').trim()),
 );
@@ -38,6 +41,9 @@ interface Props {
 
 // No view/edit toggle: whoever can write notes sees the form, pre-filled with
 // whatever is already on file, ready to add to or correct in place.
+//
+// LMP itself is not a field here — it lives only on Vitals, which already
+// derives EDD/POG from it. A second copy here would let the two disagree.
 export function ClinicalNotesSection({ appointmentId, patientId, doctorId, record, canManage, isNewVisit }: Props) {
   const [createMedicalRecord] = useCreateMedicalRecordMutation();
   const [updateMedicalRecord] = useUpdateMedicalRecordMutation();
@@ -63,10 +69,13 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             medicalHistory: record?.medicalHistory ?? '',
             surgicalHistory: record?.surgicalHistory ?? '',
             familyHistory: record?.familyHistory ?? '',
-            lmp: record?.lmp ?? '',
             menstrualHistory: record?.menstrualHistory ?? '',
             maritalStatus: record?.maritalStatus ?? '',
             obstetricHistory: record?.obstetricHistory ?? '',
+            pogByScan: record?.pogByScan ?? '',
+            perAbdomen: record?.perAbdomen ?? '',
+            perSpeculum: record?.perSpeculum ?? '',
+            perVaginum: record?.perVaginum ?? '',
           }}
           validationSchema={schema}
           onSubmit={async (values, { setSubmitting }) => {
@@ -79,10 +88,13 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
               medicalHistory: values.medicalHistory.trim(),
               surgicalHistory: values.surgicalHistory.trim(),
               familyHistory: values.familyHistory.trim(),
-              lmp: values.lmp,
               menstrualHistory: values.menstrualHistory.trim(),
               maritalStatus: values.maritalStatus.trim(),
               obstetricHistory: values.obstetricHistory.trim(),
+              pogByScan: values.pogByScan.trim(),
+              perAbdomen: values.perAbdomen.trim(),
+              perSpeculum: values.perSpeculum.trim(),
+              perVaginum: values.perVaginum.trim(),
             };
             try {
               if (record) {
@@ -102,10 +114,10 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
               {isNewVisit && (
                 <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
                   <div className="space-y-4">
-                    <FormField name="lmp" label="LMP" type="date" />
                     <FormField name="menstrualHistory" label="Menstrual History" as="textarea" rows={2} dictation />
                     <FormField name="maritalStatus" label="Marital Status" placeholder="e.g. Married" />
                     <FormField name="obstetricHistory" label="Obstetric History" as="textarea" rows={2} placeholder="e.g. G2P1L1, previous LSCS" dictation />
+                    <FormField name="pogByScan" label="POG by Scan/USG" placeholder="e.g. 12w 4d (dating scan)" />
                   </div>
                   <div className="space-y-4">
                     <FormField name="chiefComplaint" label="Chief Complaint" as="textarea" rows={2} placeholder="What brought the patient in" dictation />
@@ -115,6 +127,12 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
                   </div>
                 </div>
               )}
+              {/* Examination findings — every antenatal visit, not just the first. */}
+              <div className="grid sm:grid-cols-3 gap-4 pb-4 border-b border-slate-100">
+                <FormField name="perAbdomen" label="P/A (Per Abdomen)" as="textarea" rows={2} dictation />
+                <FormField name="perSpeculum" label="P/S (Per Speculum)" as="textarea" rows={2} dictation />
+                <FormField name="perVaginum" label="P/V (Per Vaginum)" as="textarea" rows={2} dictation />
+              </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <FormField name="diagnosis" label="Diagnosis" as="textarea" rows={4} placeholder="e.g. Acute pharyngitis, viral etiology" dictation />
                 <FormField name="treatmentAdvice" label="Treatment Advice" as="textarea" rows={4} placeholder="e.g. Warm saline gargles, paracetamol for fever, rest and fluids" dictation />
@@ -145,10 +163,6 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             <div className="grid sm:grid-cols-2 gap-4 pb-3 border-b border-slate-100">
               <div className="space-y-3">
                 <div>
-                  <p className="text-sm text-slate-600">LMP</p>
-                  <p className="text-slate-900">{record.lmp || '—'}</p>
-                </div>
-                <div>
                   <p className="text-sm text-slate-600">Menstrual History</p>
                   <p className="text-slate-900 whitespace-pre-line">{record.menstrualHistory || '—'}</p>
                 </div>
@@ -159,6 +173,10 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
                 <div>
                   <p className="text-sm text-slate-600">Obstetric History</p>
                   <p className="text-slate-900 whitespace-pre-line">{record.obstetricHistory || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">POG by Scan/USG</p>
+                  <p className="text-slate-900">{record.pogByScan || '—'}</p>
                 </div>
               </div>
               <div className="space-y-3">
@@ -181,6 +199,20 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
               </div>
             </div>
           )}
+          <div className="grid sm:grid-cols-3 gap-4 pb-3 border-b border-slate-100">
+            <div>
+              <p className="text-sm text-slate-600">P/A (Per Abdomen)</p>
+              <p className="text-slate-900 whitespace-pre-line">{record.perAbdomen || '—'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-600">P/S (Per Speculum)</p>
+              <p className="text-slate-900 whitespace-pre-line">{record.perSpeculum || '—'}</p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-600">P/V (Per Vaginum)</p>
+              <p className="text-slate-900 whitespace-pre-line">{record.perVaginum || '—'}</p>
+            </div>
+          </div>
           <div>
             <p className="text-sm text-slate-600">Diagnosis</p>
             <p className="text-slate-900 whitespace-pre-line">{record.diagnosis || '—'}</p>

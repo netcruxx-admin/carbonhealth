@@ -145,7 +145,7 @@ def test_login_is_scoped_to_the_hospital_on_the_host(client, hospital_a, hospita
     response = client.post(
         "/auth/login",
         headers={"X-Hospital-Id": hospital_b.id},
-        json={"email": hospital_a.ids["patient_email"], "password": "Passw0rd!test"},
+        json={"identifier": hospital_a.ids["patient_email"], "password": "Passw0rd!test"},
     )
     assert response.status_code == 401, (
         "hospital A's patient signed in against hospital B"

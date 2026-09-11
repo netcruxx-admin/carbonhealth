@@ -52,24 +52,27 @@ export function InventoryHub({ session }: RoleViewProps) {
     >
       <div className="space-y-6">
         {visible.length > 0 ? (
-          <div className="flex gap-1 bg-white rounded-lg shadow px-1 py-1 w-fit">
-            {visible.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setSection(t.id)}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition ${
-                    active === t.id
-                      ? 'bg-cyan-600 text-white shadow'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  {t.label}
-                </button>
-              );
-            })}
+          <div className="border-b border-slate-200">
+            <nav className="flex gap-1" aria-label="Inventory sections">
+              {visible.map((t) => {
+                const Icon = t.icon;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setSection(t.id)}
+                    aria-current={active === t.id ? 'page' : undefined}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                      active === t.id
+                        ? 'border-cyan-600 text-cyan-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </nav>
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow py-16 text-center">

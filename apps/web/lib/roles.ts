@@ -24,7 +24,6 @@ import {
   CalendarDays,
   CalendarPlus,
   CalendarRange,
-  CheckCircle,
   ClipboardList,
   Clock,
   CreditCard,
@@ -75,10 +74,6 @@ export const builtInRoleCodes = [
   pharmacistRole,
   receptionistRole,
 ];
-
-/** Tabs on the login form — roles with a self-service sign-in path. Not the set
- *  of valid roles: anyone holding a runtime-created role signs in without a tab. */
-export const loginRoleTabs = [patientRole, doctorRole, adminRole, labRole, nurseRole, pharmacistRole, receptionistRole];
 
 /** Sidebar heading per role. Falls back to a generic title for custom roles. */
 export const portalTitles: Record<string, string> = {
@@ -246,7 +241,9 @@ export const dashboardRoutes: DashboardRoute[] = [
     path: '/dashboard/pregnancies',
     label: 'Pregnancies',
     icon: Baby,
-    viewRoles: [doctorRole, nurseRole, patientRole],
+    // adminRole sees the census view (AdminPregnancies), not the doctor/nurse
+    // card grid — see the route's view map in app/dashboard/pregnancies/page.tsx.
+    viewRoles: [adminRole, doctorRole, nurseRole, patientRole],
     permission: 'pregnancies.read',
     labelByRole: { [patientRole]: 'Pregnancy' },
     module: 'anc',
@@ -265,9 +262,12 @@ export const dashboardRoutes: DashboardRoute[] = [
     permission: 'babies.read',
     labelByRole: { [patientRole]: 'My Baby' },
     module: 'anc',
-    // Every doctor and nurse holding babies.read sees this in the nav, not
-    // just ones labeled neonatal/pediatric. patientVisible below is
-    // unrelated to this and still narrows what a patient sees.
+    // Unlike Pregnancies (deliberately shown to every doctor, since a small
+    // hospital may not split obstetrics out as its own specialty), Newborns
+    // is doctor-of-babies only: a general OB doctor holding babies.read still
+    // shouldn't see a screen for a patient population they don't treat. Nurse
+    // is unrestricted — a maternity nurse works across both.
+    specialties: ['neonat', 'pediatric', 'paediatric', 'child'],
     patientVisible: (c) =>
       c.hasBaby || c.specializations.some((s) => /neonat|pediatric|paediatric|child/.test(s)),
   },
@@ -343,10 +343,6 @@ export const dashboardRoutes: DashboardRoute[] = [
     module: 'payments',
     labelByRole: { [pharmacistRole]: 'Daily Billing' },
   },
-  // A doctor's own finished visits. Every role holding appointments.read would
-  // otherwise be offered it, and there is no version of the screen for them.
-  { path: '/dashboard/completed', label: 'Completed Visits', icon: CheckCircle, viewRoles: [doctorRole], permission: 'appointments.read', viewRolesOnly: true },
-
   // ── Records and lab ───────────────────────────────────────────────────────
   {
     path: '/dashboard/records',

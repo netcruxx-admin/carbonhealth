@@ -65,7 +65,21 @@ export interface Patient {
   visitCount?: number;
   lastVisit?: string | null;
   nextVisit?: string | null;
+  /** Set when the patient has an active pregnancy record and the caller holds
+   *  pregnancies.read — absent otherwise, never inferred client-side. */
+  activePregnancy?: ActivePregnancySummary | null;
   user?: User;
+}
+
+/** The minimum a patient chart or patient list needs to know about a pregnancy
+ *  without a second trip to /pregnancies. */
+export interface ActivePregnancySummary {
+  id: string;
+  lmp: string;
+  edd: string;
+  gravida: number;
+  para: number;
+  riskFactors: string[];
 }
 
 export interface Doctor {
@@ -155,10 +169,17 @@ export interface MedicalRecord {
   medicalHistory: string;
   surgicalHistory: string;
   familyHistory: string;
-  lmp: string;
+  /** LMP itself lives only on Vitals — see Vitals.lmp — so the two can't
+   *  disagree. This is the ultrasound-derived POG, deliberately separate from
+   *  Vitals' LMP-derived one; the two dating methods often differ. */
   menstrualHistory: string;
   maritalStatus: string;
   obstetricHistory: string;
+  pogByScan: string;
+  /** Examination findings, taken at every antenatal visit — not new-visit-only. */
+  perAbdomen: string;
+  perSpeculum: string;
+  perVaginum: string;
   createdAt: string;
 }
 

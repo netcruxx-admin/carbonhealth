@@ -28,6 +28,7 @@ from ..tenancy import get_tenant_id, scoped
 from ..utils import (
     ListQuery,
     assert_aadhaar_unused,
+    attach_active_pregnancy,
     attach_users,
     attach_visit_stats,
     doctor_display,
@@ -156,6 +157,10 @@ def list_patients(
     if with_stats:
         # Visit counts and last/next visit dates, aggregated for this page only.
         attach_visit_stats(db, out)
+        # Only for a caller who could see the pregnancy record directly — this
+        # is a capability question independent of patients.read.
+        if "pregnancies.read" in effective_permissions(db, user):
+            attach_active_pregnancy(db, out)
     return out
 
 
@@ -177,7 +182,10 @@ def get_patient_by_user(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
         )
-    return _with_user(db, patient)
+    out = _with_user(db, patient)
+    if "pregnancies.read" in effective_permissions(db, user):
+        attach_active_pregnancy(db, [out])
+    return out
 
 
 @router.get("/{patient_id}", response_model=schemas.PatientOut)
@@ -188,7 +196,12 @@ def get_patient(
     scope: str = Depends(require_permission("patients.read")),
     tenant_id: str = Depends(get_tenant_id),
 ):
-    return _with_user(db, _visible_patient_or_404(db, user, patient_id, tenant_id, scope))
+    out = _with_user(db, _visible_patient_or_404(db, user, patient_id, tenant_id, scope))
+    # The one screen a doctor/nurse/admin opens to see "everything about this
+    # patient" previously had no idea she was pregnant — see attach_active_pregnancy.
+    if "pregnancies.read" in effective_permissions(db, user):
+        attach_active_pregnancy(db, [out])
+    return out
 
 
 @router.put("/{patient_id}", response_model=schemas.PatientOut)

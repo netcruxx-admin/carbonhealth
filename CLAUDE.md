@@ -140,6 +140,22 @@ A hospital is five tables, split by access shape rather than tidiness:
   the single entitlement check.
 - All data goes through `store/api.ts` (RTK Query). No component reads a store directly.
 
+## Working Conventions
+- **Symmetry over novelty.** A pattern that already exists elsewhere in the app — a card layout, a
+  stat-tile row, a badge, a modal, a table-with-pagination — is the pattern for the new screen too.
+  Don't invent a second visual language for the same kind of thing; find the closest existing
+  screen and match it.
+- **Reuse the component that's already there.** Before writing a new one, check `components/` for
+  something that does this already (`TablePagination`, `ExportButton`, `ActionIcon`, `Spinner`,
+  `DashboardShell`, the `Vital`/`Info`/`Section` helpers on the patient chart, etc.). A near-miss is
+  usually a sign the existing component should take a prop, not that it needs a sibling.
+- **Check every role before calling a change done.** This app is one route serving several roles
+  (see Route Architecture below), so adding, removing, or renaming anything — a nav item, a field,
+  a permission, a button — touches more than the role you were looking at. Before finishing: which
+  roles hold the permission today, does each of their views still make sense, does the nav entry
+  need `viewRoles`/`specialties` adjusted, and does removing a screen leave any role's sidebar
+  pointing at a dead route. "It works for the role I tested" is not the same as "it works."
+
 ## Frontend: Mock is Gone
 `lib/db.ts` no longer exists and nothing imports it — the whole app is on the real API.
 `lib/doctorRegistry.ts`, `lib/nurseRegistry.ts` and `lib/aadhaarRegistry.ts` are gone too.
@@ -165,9 +181,34 @@ Every other account comes from the real flow:
    `/dashboard/users`. The role list there is read live from the catalog, so
    any role a superadmin invents appears without a deploy.
 
-The login page offers a role tab per built-in role; the tab is a hint for the
-user, not a filter — what you can open is decided by grants, not by which tab
-you picked.
+The login page is identifier + password — no role tab. The identifier is an email or a phone
+number; `POST /auth/login` (`LoginRequest.identifier`) tells them apart on whether it contains an
+`@`, normalises a phone the same way `PhoneField` sends one (`app/identity.py`
+`normalise_phone` → `+91XXXXXXXXXX`), and looks it up on `users.email` or `users.phone`
+accordingly. `resolveHomePath()` then sends the resolved role wherever it lands — a role tab never
+added a real filter, so there isn't one.
+
+Email stays unique per hospital across every role (`uq_users_tenant_email`), but **phone
+deliberately is not**: a patient identified by a relative (`relation_type`: W/O, D/O, B/O) commonly
+shares a household or parent's number with another account on purpose, and registration must never
+refuse that. So a phone number that matches more than one account in a hospital simply stops being
+usable to sign in to either of them (a clear "more than one account" error, never a silent pick) —
+those accounts still sign in by email. See `tests/test_login_identifier.py`.
+
+**Email itself is optional now** — on every form that creates or edits an account, not just
+patients. Both `users.email` and `users.phone` default to `""`; the only rule the API actually
+enforces is that a `RegisterRequest` or `UserCreate` can't leave both blank
+(`_require_email_or_phone` in `app/schemas.py`), and an edit (`PUT /users/me`,
+`PUT /users/{id}`) can't merge into that state either (`_assert_keeps_a_way_to_sign_in` in
+`app/routers/users.py`) — an account with neither has no way to sign in, and no way to
+self-service a password reset, since that flow is still email-only. `uq_users_tenant_email` /
+`uq_users_platform_email` are partial on `email <> ''` for the same reason
+`uq_patients_tenant_aadhaar` is: "not given" has to stay repeatable across every account that
+left it out. See `tests/test_email_optional.py`.
+
+The two Yup rules a frontend form needs — "valid email if given" and "at least one of email/phone"
+— live once in `apps/web/lib/contactMethod.ts` (`looksLikePhone`, `requireEmailOrPhone`) rather than
+copied into each of the five forms that touch an account's contact details.
 
 ## Dev Setup
 ```bash

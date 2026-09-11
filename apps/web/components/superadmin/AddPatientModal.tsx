@@ -18,6 +18,7 @@ import {
   patientProfileSchemaFields,
 } from '@/components/patients/patientProfile';
 import { apiError } from '@/lib/apiError';
+import { requireEmailOrPhone } from '@/lib/contactMethod';
 import { patientRole } from '@/lib/roles';
 import type { HospitalInfo } from '@/store/api';
 import { Spinner } from '@/components/ui/spinner';
@@ -34,7 +35,9 @@ import { Spinner } from '@/components/ui/spinner';
 
 const schema = Yup.object({
   name: Yup.string().trim().required('Full name is required'),
-  email: Yup.string().email('Enter a valid email').required('Email is required'),
+  // Neither is required on its own — see requireEmailOrPhone — since login
+  // accepts either (see /auth login).
+  email: requireEmailOrPhone(Yup.string().trim().email('Enter a valid email')),
   phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
   password: Yup.string().min(8, 'At least 8 characters').required('Password is required'),
   dateOfBirth: Yup.string().required('Date of birth is required'),
@@ -165,7 +168,7 @@ export function AddPatientModal({ open, onClose, onSuccess, preselectedHospitalI
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <FormField name="name" label="Full Name" placeholder="e.g. Anita Desai" required />
                     <PhoneField name="phone" label="Phone" />
-                    <FormField name="email" label="Email" type="email" placeholder="patient@email.com" required />
+                    <FormField name="email" label="Email" type="email" placeholder="patient@email.com" />
                     <FormField name="password" label="Password" type="password" required />
                   </div>
                 </fieldset>

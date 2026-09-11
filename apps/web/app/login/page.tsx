@@ -8,16 +8,20 @@ import * as Yup from 'yup';
 import { Mail, Lock, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
 import Image from 'next/image';
 import { authStorage } from '@/lib/auth';
-import { loginRoleTabs, resolveHomePath } from '@/lib/roles';
+import { looksLikePhone } from '@/lib/contactMethod';
+import { resolveHomePath } from '@/lib/roles';
 import { FormField } from '@/components/form/FormField';
 import { useGetCurrentHospitalQuery, useLoginMutation } from '@/store/api';
 import { currentSubdomain } from '@/lib/tenant';
 import { Spinner } from '@/components/ui/spinner';
 
-type LoginType = (typeof loginRoleTabs)[number];
-
 const loginSchema = Yup.object({
-  email: Yup.string().email('Please enter a valid email').required('Email is required'),
+  identifier: Yup.string()
+    .required('Email or phone is required')
+    .test('identifier', 'Enter a valid email or 10-digit phone number', (value) => {
+      if (!value) return false;
+      return value.includes('@') ? Yup.string().email().isValidSync(value) : looksLikePhone(value);
+    }),
   password: Yup.string().required('Password is required'),
 });
 
@@ -62,18 +66,17 @@ function LoginForm() {
   const { data: hospital } = useGetCurrentHospitalQuery(undefined, { skip: !isHospitalSubdomain });
   const [loginMutation, { isLoading }] = useLoginMutation();
   const [error, setError] = useState('');
-  const [loginType, setLoginType] = useState<LoginType>('patient');
 
   const hospitalName = hospital?.name ?? 'NetCare';
 
   const formik = useFormik({
-    initialValues: { email: '', password: '' },
+    initialValues: { identifier: '', password: '' },
     validationSchema: loginSchema,
     onSubmit: async (values, { setSubmitting }) => {
       setError('');
       try {
         const result = await loginMutation({
-          email: values.email,
+          identifier: values.identifier,
           password: values.password,
         }).unwrap();
 
@@ -83,16 +86,6 @@ function LoginForm() {
         if (!isHospitalSubdomain && role !== 'superadmin') {
           setError('This portal is for platform administrators only. Please log in at your hospital\'s subdomain.');
           return;
-        }
-
-        // On a hospital subdomain, enforce that the selected tab matches the
-        // account's role so a patient can't accidentally log in as a doctor tab.
-        if (isHospitalSubdomain) {
-          const isTabRole = loginRoleTabs.includes(role as LoginType);
-          if (isTabRole && role !== loginType) {
-            setError(`This account is not a ${loginType} account`);
-            return;
-          }
         }
 
         authStorage.setSession({
@@ -120,18 +113,12 @@ function LoginForm() {
         router.push(resolveHomePath(role, result.role?.homePath));
       } catch (err: unknown) {
         const detail = (err as { data?: { detail?: string } })?.data?.detail;
-        setError(detail ?? 'Invalid email or password');
+        setError(detail ?? 'Invalid credentials');
       } finally {
         setSubmitting(false);
       }
     },
   });
-
-  const handleTypeSelect = (type: LoginType) => {
-    setLoginType(type);
-    setError('');
-    formik.setTouched({});
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 flex flex-col">
@@ -165,29 +152,6 @@ function LoginForm() {
             </p>
           </div>
 
-          {/* Login Type Selector — only on hospital subdomains */}
-          {isHospitalSubdomain && (
-            <div className="space-y-3">
-              <label className="block text-sm font-medium text-slate-700">Login As</label>
-              <div className="grid grid-cols-3 gap-2">
-                {loginRoleTabs.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handleTypeSelect(type)}
-                    className={`py-2 px-4 rounded-lg font-medium transition capitalize ${
-                      loginType === type
-                        ? 'bg-gradient-to-r from-cyan-500 to-brand-teal text-white shadow-lg'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Registration success banner */}
           {justRegistered && (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start gap-3">
@@ -206,7 +170,14 @@ function LoginForm() {
 
           <FormikProvider value={formik}>
             <form onSubmit={formik.handleSubmit} className="space-y-4" noValidate>
-              <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} required />
+              <FormField
+                name="identifier"
+                label="Email or Phone"
+                type="text"
+                placeholder="your.email@example.com or 98765 43210"
+                icon={Mail}
+                required
+              />
               <FormField name="password" label="Password" type="password" placeholder="••••••••" icon={Lock} required />
 
               {/* Forgot password link — only on hospital subdomains; superadmin

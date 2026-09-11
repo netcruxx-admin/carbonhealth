@@ -29,6 +29,9 @@ function DateBadge({ date }: { date: string }) {
 export function PatientAppointments({ session }: RoleViewProps) {
   const canBook = hasPermission(session, 'appointments.create');
   const [statusFilter, setStatusFilter] = useState<'all' | Appointment['status']>('all');
+  // Today by default, same as every staff appointment board — Clear (next to
+  // the date picker below) opens this back up to the full history.
+  const [date, setDate] = useState(todayStr);
   const { sort, toggle } = useAppointmentSort();
 
   const patientId = session?.patient?.id ?? '';
@@ -41,6 +44,7 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
   const sorted = [...appointments]
     .filter((a) => statusFilter === 'all' || a.status === statusFilter)
+    .filter((a) => !date || a.date === date)
     .sort(compareAppointments(sort));
 
   return (
@@ -61,6 +65,19 @@ export function PatientAppointments({ session }: RoleViewProps) {
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+          />
+          {date && (
+            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
+              Clear
+            </button>
+          )}
+        </div>
         {canBook && (
           <Link
             href="/dashboard/book"
@@ -73,14 +90,27 @@ export function PatientAppointments({ session }: RoleViewProps) {
 
       <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4 border-b">
-          <h3 className="font-semibold text-slate-900">All Appointments ({sorted.length})</h3>
+          <h3 className="font-semibold text-slate-900">
+            Appointments ({sorted.length})
+            {(date || statusFilter !== 'all') && <span className="text-slate-400 font-normal"> (filtered)</span>}
+          </h3>
         </div>
         {isLoading ? (
           <Spinner variant="block" />
         ) : sorted.length === 0 ? (
           <div className="text-center py-16">
             <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-600 mb-6">No appointments yet</p>
+            <p className="text-slate-600 mb-2">
+              {date || statusFilter !== 'all' ? 'No appointments match this filter.' : 'No appointments yet'}
+            </p>
+            {(date || statusFilter !== 'all') && appointments.length > 0 && (
+              <button
+                onClick={() => { setDate(''); setStatusFilter('all'); }}
+                className="text-sm text-cyan-600 hover:text-cyan-700 font-medium mb-4"
+              >
+                Clear filters to see your full history
+              </button>
+            )}
             {canBook && (
               <Link
                 href="/dashboard/book"

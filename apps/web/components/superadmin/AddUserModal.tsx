@@ -9,6 +9,7 @@ import { FormField } from '@/components/form/FormField';
 import { PhoneField, toPhoneDigits, withPrefix } from '@/components/form/PhoneField';
 import { superadminPost } from '@/lib/superadminFetch';
 import { apiError } from '@/lib/apiError';
+import { requireEmailOrPhone } from '@/lib/contactMethod';
 import {
   useCreateUserMutation,
   useUpdateUserMutation,
@@ -56,10 +57,12 @@ export function AddUserModal({
     () =>
       Yup.object({
         name: Yup.string().trim().required('Name is required').max(100, 'Too long'),
-        email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
-        phone: Yup.string()
-          .matches(/^\d{10}$/, 'Enter a valid 10-digit mobile number')
-          .required('Phone is required'),
+        // Neither is required on its own — see requireEmailOrPhone — since
+        // login accepts either (see /auth login). Also lets this modal edit
+        // an existing account that only ever had one of the two, which a
+        // hard-required phone previously blocked from being saved at all.
+        email: requireEmailOrPhone(Yup.string().trim().email('Enter a valid email')),
+        phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
         role: Yup.string()
           .oneOf(roleOptions.map((r) => r.value), 'Select a role')
           .required('Role is required'),
@@ -176,10 +179,10 @@ export function AddUserModal({
                   <FormField name="role" label="Role" as="select" placeholder="Select a role" options={roleOptions} required />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <FormField name="email" label="Email" type="email" placeholder="user@example.com" required />
+                  <FormField name="email" label="Email" type="email" placeholder="user@example.com" />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <PhoneField name="phone" label="Phone Number" required />
+                  <PhoneField name="phone" label="Phone Number" />
                 </div>
                 {!isEditing && (
                   <div className="col-span-2">

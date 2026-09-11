@@ -58,7 +58,10 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSuperadmin && !hospitalId) { setError('Please select a hospital'); return; }
-    if (!form.name.trim() || !form.email.trim()) { setError('Name and email are required'); return; }
+    if (!form.name.trim()) { setError('Name is required'); return; }
+    // Neither is required on its own — login accepts either (see /auth
+    // login) — but an account needs at least one way in.
+    if (!form.email.trim() && !form.phone.trim()) { setError('Enter an email address or a phone number'); return; }
     setLoading(true); setError('');
     const body = {
       name: form.name.trim(), email: form.email.trim(),
@@ -128,7 +131,7 @@ export function AddDoctorModal({ open, onClose, onSuccess, preselectedHospitalId
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email <span className="text-red-500">*</span></label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
               <input type="email" value={form.email} onChange={set('email')} placeholder="doctor@hospital.com" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-cyan-500" />
             </div>
             <div>

@@ -487,7 +487,9 @@ export interface OnboardingMeta {
 // ---------------------------------------------------------------------------
 // Request body types
 // ---------------------------------------------------------------------------
-export interface LoginBody { email: string; password: string }
+/** `identifier` is an email or a phone number — the server tells them apart
+ *  by whether it contains an "@" (see /auth login). */
+export interface LoginBody { identifier: string; password: string }
 export interface ChangePasswordBody {
   currentPassword: string;
   newPassword: string;
@@ -571,8 +573,6 @@ export interface PatientProfileBody {
   bloodGroup?: string;
   relationType?: string;
   relationName?: string;
-  allergies?: string;
-  chronicDiseases?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
   emergencyRelationship?: string;
@@ -603,10 +603,13 @@ export interface MedicalRecordCreateBody {
   medicalHistory?: string;
   surgicalHistory?: string;
   familyHistory?: string;
-  lmp?: string;
   menstrualHistory?: string;
   maritalStatus?: string;
   obstetricHistory?: string;
+  pogByScan?: string;
+  perAbdomen?: string;
+  perSpeculum?: string;
+  perVaginum?: string;
 }
 export interface MedicalRecordUpdateBody {
   id: string;
@@ -618,10 +621,13 @@ export interface MedicalRecordUpdateBody {
   medicalHistory?: string;
   surgicalHistory?: string;
   familyHistory?: string;
-  lmp?: string;
   menstrualHistory?: string;
   maritalStatus?: string;
   obstetricHistory?: string;
+  pogByScan?: string;
+  perAbdomen?: string;
+  perSpeculum?: string;
+  perVaginum?: string;
 }
 export interface PrescriptionCreateBody {
   appointmentId: string;
@@ -1340,7 +1346,7 @@ export const api = createApi({
     }),
     getSuperadminAppointmentsPaged: build.query<
       Paged<Appointment>,
-      PageArgs & { hospitalId?: string; status?: string; sort?: string }
+      PageArgs & { hospitalId?: string; status?: string; date?: string; sort?: string }
     >({
       query: (params) => ({ url: '/superadmin/appointments', params: cleanParams(params) }),
       transformResponse: pageOf<Appointment>,

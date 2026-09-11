@@ -45,6 +45,22 @@ def _generate_temporary_password(length: int = 12) -> str:
 router = APIRouter(prefix="/users", tags=["users"])
 
 
+def _assert_keeps_a_way_to_sign_in(email: str, phone: str) -> None:
+    """Refuse an edit that would leave an account with neither.
+
+    Create-time schemas (UserCreate, RegisterRequest) enforce this themselves
+    since they see the whole record; an edit only ever sees the fields it is
+    changing, so the check has to happen here, against the value each field
+    would end up with — its new one if the request touched it, its existing
+    one otherwise.
+    """
+    if not (email or "").strip() and not (phone or "").strip():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Enter an email address or a phone number",
+        )
+
+
 def _get_or_404(db: Session, user_id: str, tenant_id: str) -> models.User:
     user = (
         scoped(db, models.User, tenant_id).filter(models.User.id == user_id).first()
@@ -101,7 +117,10 @@ def update_own_account(
         if clash:
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    fields = body.model_dump(exclude_unset=True)
+    _assert_keeps_a_way_to_sign_in(fields.get("email", user.email), fields.get("phone", user.phone))
+
+    for field, value in fields.items():
         setattr(user, field, value)
     db.commit()
     db.refresh(user)
@@ -142,13 +161,16 @@ def create_user(
             status.HTTP_403_FORBIDDEN, "Platform roles cannot be assigned to a hospital user"
         )
 
-    existing = (
-        scoped(db, models.User, tenant_id)
-        .filter(models.User.email == body.email)
-        .first()
-    )
-    if existing:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+    # Only meaningful when an email was actually given — email is optional
+    # now (see /auth login), and every blank-email account must coexist.
+    if body.email:
+        existing = (
+            scoped(db, models.User, tenant_id)
+            .filter(models.User.email == body.email)
+            .first()
+        )
+        if existing:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
 
     user = models.User(
         id=new_id("user"),
@@ -231,7 +253,7 @@ def update_user(
     if password:
         fields["password"] = hash_password(password)
 
-    if "email" in fields and fields["email"] != user.email:
+    if fields.get("email") and fields["email"] != user.email:
         clash = (
             scoped(db, models.User, tenant_id)
             .filter(models.User.email == fields["email"], models.User.id != user_id)
@@ -239,6 +261,8 @@ def update_user(
         )
         if clash:
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+
+    _assert_keeps_a_way_to_sign_in(fields.get("email", user.email), fields.get("phone", user.phone))
 
     for field, value in fields.items():
         setattr(user, field, value)

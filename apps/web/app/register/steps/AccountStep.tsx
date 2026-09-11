@@ -22,7 +22,7 @@ export function AccountStep({ formik, needsDetails, hasVerify, onBack }: Account
       <FormField name="name" label="Full Name" placeholder="John Doe" icon={User} required />
       {/* new-password / off tokens stop Chrome from injecting saved login
           credentials into this signup form. */}
-      <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} autoComplete="off" required />
+      <FormField name="email" label="Email" type="email" placeholder="your.email@example.com" icon={Mail} autoComplete="off" />
       <PhoneField name="phone" label="Phone Number" required />
       <FormField name="password" label="Password" type="password" placeholder="••••••••" icon={Lock} autoComplete="new-password" required />
       <FormField name="confirmPassword" label="Confirm Password" type="password" placeholder="••••••••" icon={Lock} autoComplete="new-password" required />

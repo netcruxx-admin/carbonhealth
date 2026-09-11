@@ -80,6 +80,7 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
   const canDelete = hasPermission(session, 'injectables.delete');
 
   const [tab, setTab] = useState<Tab>('catalogue');
+  const [stockView, setStockView] = useState<'levels' | 'movements'>('levels');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Injectable | null>(null);
@@ -192,42 +193,46 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-white rounded-lg shadow px-1 py-1">
+        <div className="border-b border-slate-200">
+          <nav className="flex gap-1" aria-label="Injectables sections">
             {(['catalogue', 'stock'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition ${
-                  tab === t ? 'bg-cyan-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+                aria-current={tab === t ? 'page' : undefined}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                  tab === t
+                    ? 'border-cyan-600 text-cyan-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}
               >
                 {t === 'stock' ? 'Stock & Movements' : 'Catalogue'}
               </button>
             ))}
-          </div>
-          {tab === 'catalogue' && (
-            <>
-              <div className="relative flex-1 min-w-[220px] max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search injectable…"
-                  className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
-              {canManage && (
-                <button
-                  onClick={openAdd}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
-                >
-                  <Plus className="w-4 h-4" /> Add Injectable
-                </button>
-              )}
-            </>
-          )}
+          </nav>
         </div>
+
+        {tab === 'catalogue' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search injectable…"
+                className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+            </div>
+            {canManage && (
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
+              >
+                <Plus className="w-4 h-4" /> Add Injectable
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Catalogue tab */}
         {tab === 'catalogue' && (
@@ -290,6 +295,34 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
         {/* Stock tab */}
         {tab === 'stock' && (
           <>
+            <div className="border-b border-slate-200">
+              <nav className="flex gap-1" aria-label="Injectable stock views">
+                <button
+                  onClick={() => setStockView('levels')}
+                  aria-current={stockView === 'levels' ? 'page' : undefined}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                    stockView === 'levels'
+                      ? 'border-cyan-600 text-cyan-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  Stock Levels
+                </button>
+                <button
+                  onClick={() => setStockView('movements')}
+                  aria-current={stockView === 'movements' ? 'page' : undefined}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                    stockView === 'movements'
+                      ? 'border-cyan-600 text-cyan-700'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  Movement History
+                </button>
+              </nav>
+            </div>
+
+            {stockView === 'levels' && (
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b">
                 <h3 className="font-semibold text-slate-900">Stock Levels ({injectables.length})</h3>
@@ -353,7 +386,9 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                 </div>
               )}
             </div>
+            )}
 
+            {stockView === 'movements' && (
             <div className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b">
                 <h3 className="font-semibold text-slate-900">Movement History ({movements.length})</h3>
@@ -401,6 +436,7 @@ export function InjectableCatalogPanel({ session }: RoleViewProps) {
                 </div>
               )}
             </div>
+            )}
           </>
         )}
       </div>

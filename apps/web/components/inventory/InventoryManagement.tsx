@@ -53,6 +53,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
   // A hospital admin holds inventory.read so they can see what is on the
   // shelf; restocking and write-offs stay with the pharmacist.
   const canManage = hasPermission(session, 'inventory.manage');
+  const [view, setView] = useState<'levels' | 'movements'>('levels');
   const [viewing, setViewing] = useState<Medicine | null>(null);
   const [restockMed, setRestockMed] = useState<Medicine | null>(null);
   const [adjustMed, setAdjustMed] = useState<Medicine | null>(null);
@@ -146,7 +147,35 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
           </div>
         )}
 
+        <div className="border-b border-slate-200">
+          <nav className="flex gap-1" aria-label="Medicine stock views">
+            <button
+              onClick={() => setView('levels')}
+              aria-current={view === 'levels' ? 'page' : undefined}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                view === 'levels'
+                  ? 'border-cyan-600 text-cyan-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              Stock Levels
+            </button>
+            <button
+              onClick={() => setView('movements')}
+              aria-current={view === 'movements' ? 'page' : undefined}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${
+                view === 'movements'
+                  ? 'border-cyan-600 text-cyan-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              Movement History
+            </button>
+          </nav>
+        </div>
+
         {/* Stock Levels */}
+        {view === 'levels' && (
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Stock Levels ({medicines.length})</h3>
@@ -217,8 +246,10 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
             </div>
           )}
         </div>
+        )}
 
         {/* Movement History */}
+        {view === 'movements' && (
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h3 className="font-semibold text-slate-900">Movement History ({movements.length})</h3>
@@ -275,6 +306,7 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Restock Modal */}

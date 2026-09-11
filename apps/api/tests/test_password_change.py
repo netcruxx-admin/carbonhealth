@@ -33,7 +33,7 @@ def _signin(tenant, email, password):
     return tenant.client.post(
         "/auth/login",
         headers={"X-Hospital-Id": tenant.id},
-        json={"email": email, "password": password},
+        json={"identifier": email, "password": password},
     )
 
 

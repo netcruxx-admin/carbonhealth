@@ -72,8 +72,6 @@ export interface PatientProfileValues {
   state: string;
   pincode: string;
   country: string;
-  allergies: string;
-  chronicDiseases: string;
   emergencyContact: string;
   emergencyPhone: string;
   emergencyRelationship: string;
@@ -95,8 +93,6 @@ export const emptyPatientProfile: PatientProfileValues = {
   state: '',
   pincode: '',
   country: 'India',
-  allergies: '',
-  chronicDiseases: '',
   emergencyContact: '',
   emergencyPhone: '',
   emergencyRelationship: '',
@@ -120,8 +116,6 @@ export function patientProfileValues(patient: Patient): PatientProfileValues {
     state: patient.state ?? '',
     pincode: patient.pincode ?? '',
     country: patient.country || 'India',
-    allergies: patient.allergies ?? '',
-    chronicDiseases: patient.chronicDiseases ?? '',
     emergencyContact: patient.emergencyContact ?? '',
     emergencyPhone: toPhoneDigits(patient.emergencyPhone ?? ''),
     emergencyRelationship: patient.emergencyRelationship ?? '',
@@ -155,8 +149,6 @@ export const patientProfileSchemaFields = {
   district: Yup.string().max(100, 'Too long'),
   state: Yup.string().max(100, 'Too long'),
   pincode: Yup.string().test('pincode', 'Enter a valid 6-digit PIN code', (v) => !v || /^[1-9]\d{5}$/.test(v)),
-  allergies: Yup.string().max(300, 'Too long'),
-  chronicDiseases: Yup.string().max(300, 'Too long'),
   emergencyContact: Yup.string().max(100, 'Too long'),
   emergencyPhone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) => !v || /^\d{10}$/.test(v)),
   emergencyRelationship: Yup.string().max(50, 'Too long'),
@@ -187,8 +179,6 @@ export function patientProfilePayload(values: PatientProfileValues) {
     state: values.state.trim(),
     pincode: values.pincode.trim(),
     country: values.country.trim() || 'India',
-    allergies: values.allergies.trim(),
-    chronicDiseases: values.chronicDiseases.trim(),
     emergencyContact: values.emergencyContact.trim(),
     emergencyPhone: withPrefix(values.emergencyPhone),
     emergencyRelationship: values.emergencyRelationship.trim(),
@@ -300,16 +290,10 @@ export function PatientAddressFields() {
   );
 }
 
-/** Allergies, chronic conditions, next of kin and insurance. */
+/** Next of kin and insurance. */
 export function PatientCareFields() {
   return (
     <>
-      <Section title="Medical">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField name="allergies" label="Known Allergies" placeholder="e.g. Penicillin (or None)" />
-          <FormField name="chronicDiseases" label="Chronic Conditions" placeholder="e.g. Diabetes (or None)" />
-        </div>
-      </Section>
       <Section title="Emergency Contact">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FormField name="emergencyContact" label="Contact Name" placeholder="Full name" />

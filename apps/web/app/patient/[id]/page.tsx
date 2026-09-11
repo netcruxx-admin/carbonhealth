@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   ClipboardList,
   Fingerprint,
+  Baby,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useDashboardGuard } from '@/hooks/useDashboardGuard';
@@ -41,6 +42,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, isAbnormal } from '@/lib/lab';
 import { formatPatientAddress, formatRelationLine } from '@/components/patients/patientProfile';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { fmtAge, fmtDate } from '@/lib/date';
+import { daysRemaining, formatGA, gestationalAge, trimester } from '@/lib/anc';
 
 const todayStr = new Date().toISOString().split('T')[0];
 
@@ -210,6 +212,12 @@ export default function PatientDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Active pregnancy — the one thing this chart used to have no idea
+            about, even though /pregnancies has always known. */}
+        {patientRecord.activePregnancy && (
+          <PregnancyCard pregnancy={patientRecord.activePregnancy} />
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
@@ -416,6 +424,41 @@ export default function PatientDetailPage() {
         </Section>
       </div>
     </DashboardShell>
+  );
+}
+
+function PregnancyCard({ pregnancy }: { pregnancy: NonNullable<Patient['activePregnancy']> }) {
+  const ga = gestationalAge(pregnancy.lmp);
+  const tri = trimester(ga.weeks);
+  return (
+    <div className="bg-white rounded-lg shadow p-6 border-l-4 border-cyan-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+          <Baby className="w-5 h-5 text-cyan-600" /> Active Pregnancy
+        </h3>
+        <Link href="/dashboard/pregnancies" className="text-sm font-semibold text-cyan-600 hover:text-cyan-700">
+          View antenatal record →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Vital label="Gestational age" value={`${formatGA(ga)} · Tri ${tri}`} />
+        <Vital label="EDD" value={fmtDate(pregnancy.edd)} />
+        <Vital label="Due in" value={`${daysRemaining(ga.totalDays)} days`} />
+        <Vital label="Gravida / Para" value={`G${pregnancy.gravida} P${pregnancy.para}`} />
+      </div>
+      {pregnancy.riskFactors.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {pregnancy.riskFactors.map((rf) => (
+            <span
+              key={rf}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800"
+            >
+              <AlertTriangle className="w-3 h-3" /> {rf}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

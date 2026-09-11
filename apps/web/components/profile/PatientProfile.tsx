@@ -26,6 +26,7 @@ import {
   patientProfileSchemaFields,
   patientProfileValues,
 } from '@/components/patients/patientProfile';
+import { requireEmailOrPhone } from '@/lib/contactMethod';
 import { maskAadhaar } from '@/lib/aadhaar';
 import { ConsentSettings } from './ConsentSettings';
 import { Spinner } from '@/components/ui/spinner';
@@ -42,8 +43,6 @@ interface FormValues {
   emergencyPhone: string;
   emergencyRelationship: string;
   bloodGroup: string;
-  allergies: string;
-  chronicDiseases: string;
   insuranceProvider: string;
   insuranceNumber: string;
   // The same identity and address fields the registration forms collect, so a
@@ -61,7 +60,9 @@ interface FormValues {
 const schema = Yup.object({
   ...patientProfileSchemaFields,
   name: Yup.string().trim().required('Name is required'),
-  email: Yup.string().trim().email('Enter a valid email').required('Email is required'),
+  // Neither is required on its own — see requireEmailOrPhone — since login
+  // accepts either (see /auth login).
+  email: requireEmailOrPhone(Yup.string().trim().email('Enter a valid email')),
   phone: Yup.string().test('phone', 'Enter a valid 10-digit mobile number', (v) =>
     !v || /^\d{10}$/.test(v),
   ),
@@ -71,14 +72,14 @@ const schema = Yup.object({
 const STEP_FIELDS: Record<number, (keyof FormValues)[]> = {
   1: ['name', 'email', 'dateOfBirth', 'gender', 'relationType', 'relationName', 'aadhaarNumber'],
   2: ['phone', 'emergencyContact', 'emergencyPhone', 'emergencyRelationship', 'addressLine1', 'city', 'pincode'],
-  3: ['bloodGroup', 'allergies', 'chronicDiseases'],
+  3: ['bloodGroup'],
   4: ['insuranceProvider', 'insuranceNumber'],
 };
 
 const steps = [
   { number: 1, title: 'Personal Info' },
   { number: 2, title: 'Contact & Address' },
-  { number: 3, title: 'Medical Info' },
+  { number: 3, title: 'Blood Group' },
   { number: 4, title: 'Insurance' },
 ];
 
@@ -142,7 +143,7 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
         <div className="space-y-4">
           <h3 className="text-lg font-semibold text-slate-900">Personal Information</h3>
           <FormField name="name" label="Full Name" placeholder="e.g. Rahul Sharma" required />
-          <FormField name="email" label="Email" type="email" placeholder="you@example.com" required />
+          <FormField name="email" label="Email" type="email" placeholder="you@example.com" />
           <FormField name="dateOfBirth" label="Date of Birth" type="date" />
           <FormField
             name="gender"
@@ -191,26 +192,16 @@ function WizardContent({ isSaving }: { isSaving: boolean }) {
         </div>
       )}
 
-      {/* Step 3: Medical Info */}
+      {/* Step 3: Blood Group */}
       {currentStep === 3 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-slate-900">Medical Information</h3>
+          <h3 className="text-lg font-semibold text-slate-900">Blood Group</h3>
           <FormField
             name="bloodGroup"
             label="Blood Group"
             as="select"
             placeholder="Select Blood Group"
             options={bloodGroupOptions}
-          />
-          <FormField
-            name="allergies"
-            label="Allergies"
-            placeholder="e.g., Penicillin, Pollen"
-          />
-          <FormField
-            name="chronicDiseases"
-            label="Chronic Diseases"
-            placeholder="e.g., Diabetes, Hypertension"
           />
         </div>
       )}
@@ -396,19 +387,11 @@ export function PatientProfile({ session }: RoleViewProps) {
               </div>
 
               <div className="border-t border-slate-100 pt-5">
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Medical Information</h3>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Blood Group</h3>
                 <dl className="grid sm:grid-cols-2 gap-x-8 gap-y-4 text-sm">
                   <div>
                     <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Blood Group</dt>
                     <dd className="text-slate-800 font-medium">{patient?.bloodGroup || 'None'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Allergies</dt>
-                    <dd className="text-slate-800 font-medium">{patient?.allergies || 'None'}</dd>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <dt className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Chronic Diseases</dt>
-                    <dd className="text-slate-800 font-medium">{patient?.chronicDiseases || 'None'}</dd>
                   </div>
                 </dl>
               </div>

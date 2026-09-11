@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
 )
 
 from .database import Base
@@ -427,7 +428,12 @@ class User(Base):
     id = Column(String, primary_key=True)
     # NULL only for a platform superadmin; every tenant user has a hospital_id.
     hospital_id = Column(String, ForeignKey("hospitals.id", ondelete="CASCADE"), index=True, nullable=True)
-    email = Column(String, index=True, nullable=False)
+    # Optional (see /auth login): a phone number works just as well to sign in.
+    # Not nullable — "not given" is "", the same convention `phone` uses —
+    # because an account must have at least one of the two, and comparing
+    # against a real NULL rather than "" would complicate every place that
+    # already treats an empty string as "not given".
+    email = Column(String, index=True, nullable=False, default="")
     password = Column(String, nullable=False)  # bcrypt hash
     name = Column(String, nullable=False)
     phone = Column(String, default="")
@@ -444,19 +450,23 @@ class User(Base):
     __table_args__ = (
         # Email is unique per tenant (the same person can exist at two
         # hospitals), and globally unique among platform users (NULL tenant).
-        # Two partial unique indexes because Postgres treats NULLs as distinct.
+        # Partial on "hospital_id is not null" for the Postgres-treats-NULLs-
+        # as-distinct reason, and *also* partial on "email <> ''" — like
+        # `uq_patients_tenant_aadhaar` — because email is optional now, and
+        # "not given" must stay repeatable across as many accounts as have
+        # none.
         Index(
             "uq_users_tenant_email",
             "hospital_id",
             "email",
             unique=True,
-            postgresql_where=Column("hospital_id").isnot(None),
+            postgresql_where=and_(Column("hospital_id").isnot(None), Column("email") != ""),
         ),
         Index(
             "uq_users_platform_email",
             "email",
             unique=True,
-            postgresql_where=Column("hospital_id").is_(None),
+            postgresql_where=and_(Column("hospital_id").is_(None), Column("email") != ""),
         ),
     )
 
@@ -657,10 +667,19 @@ class MedicalRecord(Base):
     medical_history = Column(Text, default="")
     surgical_history = Column(Text, default="")
     family_history = Column(Text, default="")
-    lmp = Column(String, default="")
+    # LMP itself lives only on Vitals (it already derives EDD/POG from it) —
+    # duplicating it here would let the two disagree. `pog_by_scan` is
+    # deliberately separate from that LMP-derived POG: ultrasound and LMP
+    # dating often disagree, and the gap between them is itself a finding.
     menstrual_history = Column(Text, default="")
     marital_status = Column(String, default="")
     obstetric_history = Column(Text, default="")
+    pog_by_scan = Column(String, default="")
+    # Examination findings — recorded at every antenatal visit, not just the
+    # first, so these are not part of the new-visit-only history above.
+    per_abdomen = Column(Text, default="")
+    per_speculum = Column(Text, default="")
+    per_vaginum = Column(Text, default="")
     created_at = Column(String, nullable=False)
 
 

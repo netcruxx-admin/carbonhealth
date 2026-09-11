@@ -84,6 +84,24 @@ def mask_aadhaar(digits: str) -> str:
     return f"XXXX XXXX {digits[-4:]}"
 
 
+def normalise_phone(value: str) -> str:
+    """`+91XXXXXXXXXX`, or "" when `value` is not a 10-digit Indian mobile
+    number once any country-code prefix is stripped.
+
+    Turns whatever someone typed to log in into the exact form phone numbers
+    are stored in (see `PhoneField` on the frontend). Never raises: a login
+    identifier that fails to parse as a phone should simply fail to match, the
+    same as an email that fails to match — not surface a different error that
+    would tell an attacker which kind of identifier they typed.
+    """
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if digits.startswith("91") and len(digits) == 12:
+        digits = digits[2:]
+    if len(digits) != 10:
+        return ""
+    return f"+91{digits}"
+
+
 def normalise_pincode(value: str) -> str:
     """Six digits, or a ValueError. Indian PIN codes never start with 0."""
     digits = value.strip()

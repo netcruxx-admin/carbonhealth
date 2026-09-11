@@ -1,7 +1,7 @@
 import re
 from typing import List, Literal, Optional, get_args
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 from pydantic_core import PydanticUndefined
 
@@ -1034,6 +1034,19 @@ class PatientProfileFields(CamelModel):
         return values
 
 
+def _require_email_or_phone(body):
+    """An account with neither has no way to sign in and no way to reset a
+    password — the one self-service recovery path that exists is email-based.
+    Shared by every schema that can create or fully replace an account's
+    contact details; a partial update (UserUpdate/OwnAccountUpdate) can't use
+    this, since it may only be touching one of the two fields and the other's
+    current value lives in the database, not the request — see the routers.
+    """
+    if not body.email.strip() and not body.phone.strip():
+        raise ValueError("Enter an email address or a phone number")
+    return body
+
+
 class RegisterRequest(PatientProfileFields):
     """Public sign-up. Patients only — see RegisterRole.
 
@@ -1042,7 +1055,9 @@ class RegisterRequest(PatientProfileFields):
     a person registered at the counter end up as the same shape of record.
     """
 
-    email: str
+    # Not required individually — see _require_a_way_to_sign_in — because
+    # login accepts either one (see /auth login).
+    email: str = ""
     password: str
     name: str
     role: RegisterRole
@@ -1060,6 +1075,10 @@ class RegisterRequest(PatientProfileFields):
     guardian_name: str = ""
     guardian_relationship: str = ""
 
+    @model_validator(mode="after")
+    def _require_a_way_to_sign_in(self):
+        return _require_email_or_phone(self)
+
 
 class UserCreate(PatientProfileFields):
     """Staff (or patient) account created by someone with `users.manage`.
@@ -1072,7 +1091,9 @@ class UserCreate(PatientProfileFields):
     nobody could add later without a second screen.
     """
 
-    email: str
+    # Not required individually — see _require_a_way_to_sign_in — because
+    # login accepts either one (see /auth login).
+    email: str = ""
     password: str
     name: str
     role: str
@@ -1082,6 +1103,10 @@ class UserCreate(PatientProfileFields):
     specialization: Optional[str] = None
     qualification: Optional[str] = None
     experience_years: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _require_a_way_to_sign_in(self):
+        return _require_email_or_phone(self)
 
 
 class UserUpdate(CamelModel):
@@ -1105,7 +1130,10 @@ class OwnAccountUpdate(CamelModel):
 
 
 class LoginRequest(CamelModel):
-    email: str
+    # Either an email or a phone number — see /auth login for how the two are
+    # told apart. Named for what it is rather than "email", now that it can be
+    # either, so a reader doesn't have to open the endpoint to learn that.
+    identifier: str
     password: str
 
 
@@ -1142,6 +1170,20 @@ class UserOut(OutModel):
 
 
 # ---------- Patient ----------
+class ActivePregnancySummary(OutModel):
+    """The minimum a patient chart or patient list needs to know: there is an
+    active pregnancy, and roughly how it's going. Attached by
+    `attach_active_pregnancy()` — see that function for why this rides on the
+    patient response instead of a second request to /pregnancies."""
+
+    id: str
+    lmp: str
+    edd: str
+    gravida: int = 0
+    para: int = 0
+    risk_factors: List[str] = []
+
+
 class PatientOut(OutModel):
     id: str
     hospital_id: Optional[str] = None
@@ -1174,6 +1216,10 @@ class PatientOut(OutModel):
     visit_count: int = 0
     last_visit: Optional[str] = None
     next_visit: Optional[str] = None
+    # Set by attach_active_pregnancy() when the patient has one and the caller
+    # holds pregnancies.read — never derived on the client, which previously had
+    # no way to know without a separate trip to /pregnancies.
+    active_pregnancy: Optional[ActivePregnancySummary] = None
     user: Optional["UserOut"] = None
 
 
@@ -1384,10 +1430,15 @@ class MedicalRecordCreate(CamelModel):
     medical_history: str = ""
     surgical_history: str = ""
     family_history: str = ""
-    lmp: str = ""
     menstrual_history: str = ""
     marital_status: str = ""
     obstetric_history: str = ""
+    # POG by ultrasound, kept apart from Vitals' LMP-derived POG — see
+    # MedicalRecord.pog_by_scan in models.py.
+    pog_by_scan: str = ""
+    per_abdomen: str = ""
+    per_speculum: str = ""
+    per_vaginum: str = ""
 
 
 class MedicalRecordUpdate(CamelModel):
@@ -1402,10 +1453,13 @@ class MedicalRecordUpdate(CamelModel):
     medical_history: Optional[str] = None
     surgical_history: Optional[str] = None
     family_history: Optional[str] = None
-    lmp: Optional[str] = None
     menstrual_history: Optional[str] = None
     marital_status: Optional[str] = None
     obstetric_history: Optional[str] = None
+    pog_by_scan: Optional[str] = None
+    per_abdomen: Optional[str] = None
+    per_speculum: Optional[str] = None
+    per_vaginum: Optional[str] = None
 
 
 class MedicalRecordOut(OutModel):
@@ -1421,10 +1475,13 @@ class MedicalRecordOut(OutModel):
     medical_history: str = ""
     surgical_history: str = ""
     family_history: str = ""
-    lmp: str = ""
     menstrual_history: str = ""
     marital_status: str = ""
     obstetric_history: str = ""
+    pog_by_scan: str = ""
+    per_abdomen: str = ""
+    per_speculum: str = ""
+    per_vaginum: str = ""
     created_at: str
 
 

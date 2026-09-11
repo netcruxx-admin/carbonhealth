@@ -149,7 +149,7 @@ def _login(client: TestClient, hospital_id: str, email: str) -> str:
     response = client.post(
         "/auth/login",
         headers={"X-Hospital-Id": hospital_id},
-        json={"email": email, "password": PROVISIONED_PASSWORD},
+        json={"identifier": email, "password": PROVISIONED_PASSWORD},
     )
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -176,7 +176,7 @@ def _superadmin_token(client: TestClient) -> str:
     response = client.post(
         "/auth/login",
         json={
-            "email": settings.superadmin_email,
+            "identifier": settings.superadmin_email,
             "password": settings.superadmin_password,
         },
     )
