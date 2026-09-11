@@ -13,7 +13,7 @@ from ..config import settings
 from ..database import get_db
 from ..tenancy import assert_body_in_tenant, assert_in_tenant, get_tenant_id, scoped
 from ..utils import ListQuery, list_params, new_id, now_iso, paginate, text_search
-from ..utils import doctor_display, patient_display
+from ..utils import assert_no_duplicate_department_booking, doctor_display, patient_display
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -505,6 +505,14 @@ def initiate_payment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
+    # Checked here, before any money moves, rather than only in /verify: a
+    # patient charged for a booking that then gets refused would be the worst
+    # of the outcomes this rule could cause. See /verify for why it is not
+    # re-enforced as a hard refusal there.
+    assert_no_duplicate_department_booking(
+        db, tenant_id, body.patient_id, body.department_id, body.date
+    )
+
     # The fee comes from the hospital's price list, not the client — naming a
     # visit type cannot forge a cheaper amount, and pricing.fee_for refuses an
     # unpriced or retired one rather than booking at zero.
@@ -618,6 +626,12 @@ def verify_payment(
     assert_in_tenant(db, models.Patient, body.patient_id, tenant_id)
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
+
+    # Deliberately not re-checked here: /initiate already refused a duplicate
+    # booking before any money moved. A second booking racing in between
+    # (two tabs, both past /initiate) is rare enough that refusing here — after
+    # Razorpay has captured the payment — would trade it for the strictly worse
+    # outcome the pricing comment below describes: charged with no appointment.
 
     # Re-price from the schedule so the amount stored in the payment row is
     # always ours, never a number the client sent.

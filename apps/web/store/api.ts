@@ -1184,7 +1184,7 @@ export const api = createApi({
     // ── Appointments ─────────────────────────────────────────────────────────
     listAppointments: build.query<
       Appointment[],
-      { patientId?: string; doctorId?: string } | void
+      { patientId?: string; doctorId?: string; departmentId?: string; date?: string } | void
     >({
       query: (params) => ({
         url: '/appointments',

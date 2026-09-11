@@ -22,6 +22,7 @@ from ..utils import (
     appointment_name_search,
     appointment_bills,
     appointments_with_vitals,
+    assert_no_duplicate_department_booking,
     doctor_display,
     new_id,
     now_iso,
@@ -223,6 +224,10 @@ def create_appointment(
     assert_in_tenant(db, models.Doctor, body.doctor_id, tenant_id)
     assert_in_tenant(db, models.Department, body.department_id, tenant_id)
 
+    assert_no_duplicate_department_booking(
+        db, tenant_id, body.patient_id, body.department_id, body.date
+    )
+
     # `payment_mode` is how this booking is being paid for, not a column on the
     # appointment: the answer lives on the payment row it raises below.
     fields = body.model_dump()
@@ -372,6 +377,26 @@ def update_appointment(
         or changes.get("time", appointment.time) != appointment.time
     )
     was_cancelled = appointment.status == "cancelled"
+
+    # Same rule as booking, checked again here: a reschedule or an uncancel is
+    # a second way to land two live appointments in one department on one day,
+    # not just a fresh create. Only worth the query when one of the three
+    # things the rule actually depends on is what's changing.
+    final_status = changes.get("status", appointment.status)
+    rule_relevant = (
+        "department_id" in changes
+        or "date" in changes
+        or (was_cancelled and final_status != "cancelled")
+    )
+    if rule_relevant and final_status != "cancelled":
+        assert_no_duplicate_department_booking(
+            db,
+            tenant_id,
+            appointment.patient_id,
+            changes.get("department_id", appointment.department_id),
+            changes.get("date", appointment.date),
+            exclude_appointment_id=appointment.id,
+        )
 
     for field, value in changes.items():
         setattr(appointment, field, value)

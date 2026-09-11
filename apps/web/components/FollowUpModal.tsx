@@ -17,6 +17,7 @@ import {
 import { PaymentModeField, type CounterPaymentMode } from '@/components/payments/PaymentModeField';
 import { blockedSlotSet } from '@/lib/schedule';
 import { useBreakSlots } from '@/hooks/useBreakSlots';
+import { useDepartmentBookingConflict } from '@/hooks/useDepartmentBookingConflict';
 
 function toDateStr(d: Date) {
   const y = d.getFullYear();
@@ -88,6 +89,9 @@ export function FollowUpModal({
   // checkout screen. The bill is raised pending and settled at the desk.
   const [paymentMode, setPaymentMode] = useState<CounterPaymentMode>('cash');
   const [error, setError] = useState('');
+  // Mirrors the form's date so the conflict check — a hook, and so cannot live
+  // inside Formik's render prop — can react to it.
+  const [selectedDate, setSelectedDate] = useState(defaultFollowUpDate());
 
   const [createAppointment] = useCreateAppointmentMutation();
   const { data: appointments = [], isLoading: loadingAppointments } = useListAppointmentsQuery({ doctorId: appointment.doctorId });
@@ -97,6 +101,15 @@ export function FollowUpModal({
   const { data: fees = [] } = useListConsultationFeesQuery(hospitalId ? { hospitalId } : undefined);
   const followUpFee = fees.find((f) => f.visitType === FOLLOW_UP_VISIT_TYPE);
   const breakSlots = useBreakSlots(SLOTS);
+
+  // Same one-booking-per-department-per-day rule the server enforces on
+  // create — checked here too so picking a date that already collides is
+  // caught before the rest of the form is filled in.
+  const deptConflict = useDepartmentBookingConflict(
+    appointment.patientId,
+    appointment.departmentId,
+    selectedDate,
+  );
 
   const initialValues: FollowUpFormValues = {
     date: defaultFollowUpDate(),
@@ -131,6 +144,11 @@ export function FollowUpModal({
             const blocked = blockedSlotSet(blocks, appointment.doctorId, values.date, SLOTS);
             if (slotStatus(values.time, values.date, booked, blocked, breakSlots) !== 'available') {
               setError('That slot is not available for this doctor');
+              setSubmitting(false);
+              return;
+            }
+            if (deptConflict) {
+              setError('This patient already has an appointment in this department on this date.');
               setSubmitting(false);
               return;
             }
@@ -169,6 +187,14 @@ export function FollowUpModal({
                       <p className="text-red-700 text-sm">{error}</p>
                     </div>
                   )}
+                  {!error && deptConflict && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-amber-800 text-sm">
+                        This patient already has an appointment in this department on this date. Pick a different date.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-6">
                     <div>
@@ -176,7 +202,11 @@ export function FollowUpModal({
                       <Calendar
                         mode="single"
                         selected={values.date ? new Date(`${values.date}T00:00:00`) : undefined}
-                        onSelect={(d) => setValues({ ...values, date: d ? toDateStr(d) : '', time: '' })}
+                        onSelect={(d) => {
+                          const ds = d ? toDateStr(d) : '';
+                          setValues({ ...values, date: ds, time: '' });
+                          setSelectedDate(ds);
+                        }}
                         disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
                         className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
                       />
@@ -238,7 +268,7 @@ export function FollowUpModal({
                   <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
                     Cancel
                   </button>
-                  <button type="submit" disabled={isSubmitting || !dirty} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                  <button type="submit" disabled={isSubmitting || !dirty || deptConflict} className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
                     {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Schedule Follow-Up'}
                   </button>
                 </div>
