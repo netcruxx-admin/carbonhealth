@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useFormik } from 'formik';
 import {
   Banknote,
   Clock,
@@ -66,23 +67,27 @@ function Row({
 }) {
   const collected = row.status === 'completed';
   const [collecting, setCollecting] = useState(false);
-  const [method, setMethod] = useState('cash');
-  const [updatePayment, { isLoading: saving }] = useUpdatePaymentMutation();
+  const [updatePayment] = useUpdatePaymentMutation();
 
-  async function collect() {
-    try {
-      // Status and method together: "paid" without saying how is not something
-      // the day-report can reconcile against a cash drawer.
-      await updatePayment({
-        id: row.paymentId,
-        body: { status: 'completed', paymentMethod: method },
-      }).unwrap();
-      toast.success(`Collected ${fmtCurrency(row.amount)}`);
-      setCollecting(false);
-    } catch (err) {
-      toast.error(apiError(err, 'Could not record the payment'));
-    }
-  }
+  const formik = useFormik({
+    initialValues: { method: 'cash' },
+    onSubmit: async (values, { setSubmitting }) => {
+      try {
+        // Status and method together: "paid" without saying how is not something
+        // the day-report can reconcile against a cash drawer.
+        await updatePayment({
+          id: row.paymentId,
+          body: { status: 'completed', paymentMethod: values.method },
+        }).unwrap();
+        toast.success(`Collected ${fmtCurrency(row.amount)}`);
+        setCollecting(false);
+      } catch (err) {
+        toast.error(apiError(err, 'Could not record the payment'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
   return (
     <tr className="border-b hover:bg-slate-50 transition">
       <td className="py-3 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
@@ -122,8 +127,9 @@ function Row({
             collecting ? (
               <>
                 <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
+                  name="method"
+                  value={formik.values.method}
+                  onChange={formik.handleChange}
                   className="border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500"
                 >
                   {COUNTER_METHODS.map((m) => (
@@ -131,14 +137,16 @@ function Row({
                   ))}
                 </select>
                 <button
-                  onClick={collect}
-                  disabled={saving}
+                  type="button"
+                  onClick={() => formik.submitForm()}
+                  disabled={formik.isSubmitting}
                   className="text-xs font-medium bg-green-600 text-white px-2.5 py-1 rounded-lg hover:bg-green-700 transition disabled:opacity-60"
                 >
-                  {saving ? 'Saving…' : 'Confirm'}
+                  {formik.isSubmitting ? 'Saving…' : 'Confirm'}
                 </button>
                 <button
-                  onClick={() => setCollecting(false)}
+                  type="button"
+                  onClick={() => { setCollecting(false); formik.resetForm(); }}
                   className="text-xs text-slate-500 px-1.5 py-1 hover:text-slate-700"
                 >
                   Cancel

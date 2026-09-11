@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useFormik } from 'formik';
 import { Check, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -17,25 +18,30 @@ import { fmtCurrency } from './billingFormat';
  *  would be the slowest part of the job. */
 function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string }) {
   const [editing, setEditing] = useState(false);
-  const [amount, setAmount] = useState(String(fee.amount));
-  const [label, setLabel] = useState(fee.label);
-  const [updateFee, { isLoading: saving }] = useUpdateConsultationFeeMutation();
+  const [updateFee] = useUpdateConsultationFeeMutation();
   const [deleteFee] = useDeleteConsultationFeeMutation();
 
-  async function save() {
-    const parsed = Number(amount);
-    if (Number.isNaN(parsed) || parsed < 0) {
-      toast.error('Enter a valid amount');
-      return;
-    }
-    try {
-      await updateFee({ id: fee.id, body: { amount: parsed, label: label.trim() }, hospitalId }).unwrap();
-      toast.success('Fee updated');
-      setEditing(false);
-    } catch (err) {
-      toast.error(apiError(err, 'Could not update the fee'));
-    }
-  }
+  const formik = useFormik({
+    initialValues: { label: fee.label, amount: String(fee.amount) },
+    enableReinitialize: true,
+    onSubmit: async (values, { setSubmitting }) => {
+      const parsed = Number(values.amount);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        toast.error('Enter a valid amount');
+        setSubmitting(false);
+        return;
+      }
+      try {
+        await updateFee({ id: fee.id, body: { amount: parsed, label: values.label.trim() }, hospitalId }).unwrap();
+        toast.success('Fee updated');
+        setEditing(false);
+      } catch (err) {
+        toast.error(apiError(err, 'Could not update the fee'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
 
   async function toggleActive() {
     try {
@@ -59,8 +65,9 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
       <td className="py-3 px-4">
         {editing ? (
           <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
+            name="label"
+            value={formik.values.label}
+            onChange={formik.handleChange}
             className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-48 focus:outline-none focus:border-cyan-500"
           />
         ) : (
@@ -73,8 +80,9 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
           <input
             type="number"
             min="0"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            name="amount"
+            value={formik.values.amount}
+            onChange={formik.handleChange}
             className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-28 text-right focus:outline-none focus:border-cyan-500"
           />
         ) : (
@@ -100,15 +108,17 @@ function FeeRow({ fee, hospitalId }: { fee: ConsultationFee; hospitalId?: string
           {editing ? (
             <>
               <button
-                onClick={save}
-                disabled={saving}
+                type="button"
+                onClick={() => formik.submitForm()}
+                disabled={formik.isSubmitting}
                 title="Save"
                 className="p-1.5 rounded text-green-600 hover:bg-green-50 transition"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {formik.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </button>
               <button
-                onClick={() => { setEditing(false); setAmount(String(fee.amount)); setLabel(fee.label); }}
+                type="button"
+                onClick={() => { setEditing(false); formik.resetForm(); }}
                 title="Cancel"
                 className="p-1.5 rounded text-slate-400 hover:bg-slate-100 transition"
               >
@@ -151,32 +161,36 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
     includeInactive: true,
     hospitalId,
   });
-  const [createFee, { isLoading: creating }] = useCreateConsultationFeeMutation();
+  const [createFee] = useCreateConsultationFeeMutation();
   const [adding, setAdding] = useState(false);
-  const [newLabel, setNewLabel] = useState('');
-  const [newAmount, setNewAmount] = useState('');
 
-  async function add() {
-    const label = newLabel.trim();
-    const parsed = Number(newAmount || 0);
-    if (!label) {
-      toast.error('Give the visit type a name');
-      return;
-    }
-    if (Number.isNaN(parsed) || parsed < 0) {
-      toast.error('Enter a valid amount');
-      return;
-    }
-    try {
-      await createFee({ label, amount: parsed, hospitalId }).unwrap();
-      toast.success('Visit type added');
-      setAdding(false);
-      setNewLabel('');
-      setNewAmount('');
-    } catch (err) {
-      toast.error(apiError(err, 'Could not add the visit type'));
-    }
-  }
+  const addFormik = useFormik({
+    initialValues: { label: '', amount: '' },
+    onSubmit: async (values, { setSubmitting, resetForm }) => {
+      const label = values.label.trim();
+      const parsed = Number(values.amount || 0);
+      if (!label) {
+        toast.error('Give the visit type a name');
+        setSubmitting(false);
+        return;
+      }
+      if (Number.isNaN(parsed) || parsed < 0) {
+        toast.error('Enter a valid amount');
+        setSubmitting(false);
+        return;
+      }
+      try {
+        await createFee({ label, amount: parsed, hospitalId }).unwrap();
+        toast.success('Visit type added');
+        setAdding(false);
+        resetForm();
+      } catch (err) {
+        toast.error(apiError(err, 'Could not add the visit type'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
 
   if (isLoading) {
     return (
@@ -222,8 +236,9 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
               <input
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
+                name="label"
+                value={addFormik.values.label}
+                onChange={addFormik.handleChange}
                 placeholder="e.g. Health Check"
                 autoFocus
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:border-cyan-500"
@@ -234,21 +249,24 @@ export function ConsultationFeesContent({ hospitalId }: { hospitalId?: string } 
               <input
                 type="number"
                 min="0"
-                value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
+                name="amount"
+                value={addFormik.values.amount}
+                onChange={addFormik.handleChange}
                 placeholder="0"
                 className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-32 focus:outline-none focus:border-cyan-500"
               />
             </div>
             <button
-              onClick={add}
-              disabled={creating}
+              type="button"
+              onClick={() => addFormik.submitForm()}
+              disabled={addFormik.isSubmitting}
               className="bg-cyan-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg hover:bg-cyan-700 transition disabled:opacity-60"
             >
-              {creating ? 'Adding…' : 'Add'}
+              {addFormik.isSubmitting ? 'Adding…' : 'Add'}
             </button>
             <button
-              onClick={() => { setAdding(false); setNewLabel(''); setNewAmount(''); }}
+              type="button"
+              onClick={() => { setAdding(false); addFormik.resetForm(); }}
               className="text-sm text-slate-500 px-3 py-1.5 hover:text-slate-700"
             >
               Cancel

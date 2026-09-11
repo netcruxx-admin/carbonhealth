@@ -2,11 +2,14 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { Package, X, AlertTriangle, TrendingUp, TrendingDown, Eye } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { InventoryMovementType, Medicine } from '@/lib/types';
 import { ActionIcon } from '@/components/ActionIcon';
 import { RecordDialog } from '@/components/RecordDialog';
+import { FormField } from '@/components/form/FormField';
 import type { RoleViewProps } from '@/components/RoleView';
 import { hasPermission } from '@/lib/auth';
 import {
@@ -29,20 +32,32 @@ const MOVEMENT_BADGE: Record<InventoryMovementType, string> = {
 
 const MOVEMENT_TYPES: InventoryMovementType[] = ['restock', 'dispense', 'expired', 'returned', 'adjustment'];
 
-interface RestockForm {
-  medicineId: string;
+interface RestockValues {
   quantity: string;
   lotNumber: string;
   expiryDate: string;
   notes: string;
 }
 
-interface AdjustForm {
-  medicineId: string;
+interface AdjustValues {
   quantity: string;
   movementType: InventoryMovementType;
   notes: string;
 }
+
+const restockSchema = Yup.object({
+  quantity: Yup.string().test('qty', 'Enter a valid quantity', (v) => {
+    const n = Number(v);
+    return !!n && n > 0;
+  }),
+});
+
+const adjustSchema = Yup.object({
+  quantity: Yup.string().test('qty', 'Enter a non-zero quantity', (v) => {
+    const n = Number(v);
+    return !Number.isNaN(n) && n !== 0;
+  }),
+});
 
 /**
  * Medicine stock levels and movement history. Rendered as the "Stock &
@@ -57,12 +72,6 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
   const [viewing, setViewing] = useState<Medicine | null>(null);
   const [restockMed, setRestockMed] = useState<Medicine | null>(null);
   const [adjustMed, setAdjustMed] = useState<Medicine | null>(null);
-  const [restockForm, setRestockForm] = useState<RestockForm>({
-    medicineId: '', quantity: '', lotNumber: '', expiryDate: '', notes: '',
-  });
-  const [adjustForm, setAdjustForm] = useState<AdjustForm>({
-    medicineId: '', quantity: '', movementType: 'adjustment', notes: '',
-  });
   const [formError, setFormError] = useState('');
 
   const { data: medicinePage, isLoading: loadingMedicines } = useListMedicinesPagedQuery({ limit: 200, offset: 0 });
@@ -75,51 +84,12 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
 
   const openRestock = (med: Medicine) => {
     setRestockMed(med);
-    setRestockForm({ medicineId: med.id, quantity: '', lotNumber: '', expiryDate: '', notes: '' });
     setFormError('');
   };
 
   const openAdjust = (med: Medicine) => {
     setAdjustMed(med);
-    setAdjustForm({ medicineId: med.id, quantity: '', movementType: 'adjustment', notes: '' });
     setFormError('');
-  };
-
-  const handleRestock = async () => {
-    setFormError('');
-    const qty = Number(restockForm.quantity);
-    if (!qty || qty <= 0) { setFormError('Enter a valid quantity'); return; }
-    try {
-      await restockMedicine({
-        medicineId: restockForm.medicineId,
-        quantity: qty,
-        lotNumber: restockForm.lotNumber,
-        expiryDate: restockForm.expiryDate,
-        notes: restockForm.notes,
-      }).unwrap();
-      toast.success('Stock updated');
-      setRestockMed(null);
-    } catch (err) {
-      setFormError(apiError(err, 'Failed to restock'));
-    }
-  };
-
-  const handleAdjust = async () => {
-    setFormError('');
-    const qty = Number(adjustForm.quantity);
-    if (isNaN(qty) || qty === 0) { setFormError('Enter a non-zero quantity'); return; }
-    try {
-      await adjustInventory({
-        medicineId: adjustForm.medicineId,
-        quantity: qty,
-        movementType: adjustForm.movementType,
-        notes: adjustForm.notes,
-      }).unwrap();
-      toast.success('Inventory adjusted');
-      setAdjustMed(null);
-    } catch (err) {
-      setFormError(apiError(err, 'Failed to adjust'));
-    }
   };
 
   const stockBadgeClass = (med: Medicine) => {
@@ -320,64 +290,54 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
               </button>
             </div>
             <p className="text-sm text-slate-500 mb-4">Current stock: <span className="font-semibold text-slate-900">{restockMed.stock}</span></p>
-            <div className="grid gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={restockForm.quantity}
-                  onChange={(e) => setRestockForm((f) => ({ ...f, quantity: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="Units to add"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Lot Number</label>
-                <input
-                  value={restockForm.lotNumber}
-                  onChange={(e) => setRestockForm((f) => ({ ...f, lotNumber: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="e.g. LOT-2024-001"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
-                <input
-                  type="date"
-                  value={restockForm.expiryDate}
-                  onChange={(e) => setRestockForm((f) => ({ ...f, expiryDate: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-                <textarea
-                  value={restockForm.notes}
-                  onChange={(e) => setRestockForm((f) => ({ ...f, notes: e.target.value }))}
-                  rows={2}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                  placeholder="Optional notes…"
-                />
-              </div>
-              {formError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {formError}
-                </p>
+            <Formik<RestockValues>
+              initialValues={{ quantity: '', lotNumber: '', expiryDate: '', notes: '' }}
+              validationSchema={restockSchema}
+              onSubmit={async (values, { setSubmitting }) => {
+                setFormError('');
+                try {
+                  await restockMedicine({
+                    medicineId: restockMed.id,
+                    quantity: Number(values.quantity),
+                    lotNumber: values.lotNumber,
+                    expiryDate: values.expiryDate,
+                    notes: values.notes,
+                  }).unwrap();
+                  toast.success('Stock updated');
+                  setRestockMed(null);
+                } catch (err) {
+                  setFormError(apiError(err, 'Failed to restock'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {({ isSubmitting }) => (
+                <Form className="grid gap-3">
+                  <FormField name="quantity" label="Quantity" type="number" min="1" placeholder="Units to add" required />
+                  <FormField name="lotNumber" label="Lot Number" placeholder="e.g. LOT-2024-001" />
+                  <FormField name="expiryDate" label="Expiry Date" type="date" />
+                  <FormField name="notes" label="Notes" as="textarea" rows={2} placeholder="Optional notes…" />
+                  {formError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {formError}
+                    </p>
+                  )}
+                  <div className="flex gap-3 pt-1">
+                    <button type="button" onClick={() => setRestockMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || isRestocking}
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting || isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
+                    </button>
+                  </div>
+                </Form>
               )}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setRestockMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleRestock}
-                  disabled={isRestocking}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
-                >
-                  {isRestocking ? <Spinner size="sm" label="Saving…" /> : 'Restock'}
-                </button>
-              </div>
-            </div>
+            </Formik>
           </div>
         </div>
       )}
@@ -393,57 +353,57 @@ export function InventoryStockPanel({ session }: RoleViewProps) {
               </button>
             </div>
             <p className="text-sm text-slate-500 mb-4">Current stock: <span className="font-semibold text-slate-900">{adjustMed.stock}</span></p>
-            <div className="grid gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-                <select
-                  value={adjustForm.movementType}
-                  onChange={(e) => setAdjustForm((f) => ({ ...f, movementType: e.target.value as InventoryMovementType }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  {MOVEMENT_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quantity (negative to remove) *</label>
-                <input
-                  type="number"
-                  value={adjustForm.quantity}
-                  onChange={(e) => setAdjustForm((f) => ({ ...f, quantity: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder="e.g. -5 or +10"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-                <textarea
-                  value={adjustForm.notes}
-                  onChange={(e) => setAdjustForm((f) => ({ ...f, notes: e.target.value }))}
-                  rows={2}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                  placeholder="Reason for adjustment…"
-                />
-              </div>
-              {formError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {formError}
-                </p>
+            <Formik<AdjustValues>
+              initialValues={{ quantity: '', movementType: 'adjustment', notes: '' }}
+              validationSchema={adjustSchema}
+              onSubmit={async (values, { setSubmitting }) => {
+                setFormError('');
+                try {
+                  await adjustInventory({
+                    medicineId: adjustMed.id,
+                    quantity: Number(values.quantity),
+                    movementType: values.movementType,
+                    notes: values.notes,
+                  }).unwrap();
+                  toast.success('Inventory adjusted');
+                  setAdjustMed(null);
+                } catch (err) {
+                  setFormError(apiError(err, 'Failed to adjust'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {({ isSubmitting }) => (
+                <Form className="grid gap-3">
+                  <FormField
+                    name="movementType"
+                    label="Type"
+                    as="select"
+                    options={MOVEMENT_TYPES.map((t) => ({ value: t, label: t }))}
+                  />
+                  <FormField name="quantity" label="Quantity (negative to remove)" type="number" placeholder="e.g. -5 or +10" required />
+                  <FormField name="notes" label="Notes" as="textarea" rows={2} placeholder="Reason for adjustment…" />
+                  {formError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {formError}
+                    </p>
+                  )}
+                  <div className="flex gap-3 pt-1">
+                    <button type="button" onClick={() => setAdjustMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || isAdjusting}
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting || isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}
+                    </button>
+                  </div>
+                </Form>
               )}
-              <div className="flex gap-3 pt-1">
-                <button onClick={() => setAdjustMed(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAdjust}
-                  disabled={isAdjusting}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
-                >
-                  {isAdjusting ? <Spinner size="sm" label="Saving…" /> : 'Apply Adjustment'}
-                </button>
-              </div>
-            </div>
+            </Formik>
           </div>
         </div>
       )}
