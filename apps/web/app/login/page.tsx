@@ -201,7 +201,7 @@ function LoginForm() {
 
               <button
                 type="submit"
-                disabled={isLoading || formik.isSubmitting}
+                disabled={isLoading || formik.isSubmitting || !formik.dirty}
                 className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading || formik.isSubmitting ? <Spinner size="sm" label="Signing in…" /> : 'Sign In'}

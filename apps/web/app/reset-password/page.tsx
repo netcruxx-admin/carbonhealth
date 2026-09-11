@@ -135,7 +135,7 @@ function ResetPasswordForm() {
 
                 <button
                   type="submit"
-                  disabled={formik.isSubmitting || !token}
+                  disabled={formik.isSubmitting || !formik.dirty || !token}
                   className="inline-flex items-center justify-center gap-2 w-full bg-gradient-to-r from-cyan-500 to-brand-teal text-white py-2 rounded-lg font-semibold hover:shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {formik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Set new password'}
