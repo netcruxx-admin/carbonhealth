@@ -373,7 +373,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ doctorId: editing.doctorId, status: editing.status, reason: editing.reason ?? '' }}
               validationSchema={editSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setError('');
                 try {
                   await updateAppointment({
@@ -391,18 +391,24 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   toast.success('Appointment updated');
                 } catch (err) {
                   setError(apiError(err, 'Could not update the appointment'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="space-y-4">
-                <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
-                <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
-                <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Changes</button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="space-y-4">
+                  <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
+                  <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
+                  <FormField name="reason" label="Reason" as="textarea" placeholder="Reason for visit" />
+                  <div className="flex gap-3 pt-2">
+                    <button type="button" onClick={() => setEditing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
+                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -455,7 +461,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">Cancel</button>
-              <button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+              <button onClick={() => rescheduleFormik.submitForm()} disabled={!reDate || !reTime || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
                 {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
               </button>
             </div>
@@ -474,7 +480,7 @@ export function PlatformAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={emptyVitals}
               validationSchema={vitalsSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setVitalsError('');
                 try {
                   await createVitals({
@@ -488,19 +494,25 @@ export function PlatformAppointments({ session }: RoleViewProps) {
                   toast.success('Vitals recorded');
                 } catch (err) {
                   setVitalsError(apiError(err, 'Could not record the vitals'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid grid-cols-2 gap-4">
-                <VitalsFormFields />
-                {vitalsError && (
-                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
-                )}
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">Save Vitals</button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid grid-cols-2 gap-4">
+                  <VitalsFormFields />
+                  {vitalsError && (
+                    <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">Cancel</button>
+                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>

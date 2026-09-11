@@ -573,7 +573,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting, status }) => (
+              {({ isSubmitting, status, dirty }) => (
                 <Form className="space-y-4">
                   <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
                   <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
@@ -587,7 +587,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !dirty}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
@@ -653,7 +653,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </button>
               <button
                 onClick={() => rescheduleFormik.submitForm()}
-                disabled={!rescheduleFormik.values.date || !rescheduleFormik.values.time || rescheduleFormik.isSubmitting}
+                disabled={!rescheduleFormik.values.date || !rescheduleFormik.values.time || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting}
                 className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
                 {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
@@ -694,7 +694,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting, status }) => (
+              {({ isSubmitting, status, dirty }) => (
                 <Form className="grid grid-cols-2 gap-4">
                   <VitalsFormFields />
                   {status && (
@@ -706,7 +706,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !dirty}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}

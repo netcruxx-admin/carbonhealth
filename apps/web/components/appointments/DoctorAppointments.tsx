@@ -361,7 +361,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={emptyVitals}
               validationSchema={vitalsSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setVitalsError('');
                 try {
                   await createVitals({
@@ -374,23 +374,27 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   flash('Vitals recorded');
                 } catch (err) {
                   setVitalsError(apiError(err, 'Could not record the vitals'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid grid-cols-2 gap-4">
-                <VitalsFormFields />
-                {vitalsError && (
-                  <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
-                )}
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Vitals
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid grid-cols-2 gap-4">
+                  <VitalsFormFields />
+                  {vitalsError && (
+                    <p className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{vitalsError}</p>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setAddingVitals(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -409,7 +413,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
             <Formik
               initialValues={{ medicineName: '', dosage: '', frequency: '', duration: '', instructions: '' }}
               validationSchema={rxSchema}
-              onSubmit={async (values) => {
+              onSubmit={async (values, { setSubmitting }) => {
                 setRxError('');
                 try {
                   await createPrescription({
@@ -426,32 +430,36 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                   flash('Prescription added');
                 } catch (err) {
                   setRxError(apiError(err, 'Could not save the prescription'));
+                } finally {
+                  setSubmitting(false);
                 }
               }}
             >
-              <Form className="grid sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
-                </div>
-                <FormField name="dosage" label="Dosage" placeholder="e.g. 500 mg" required />
-                <FormField name="frequency" label="Frequency" placeholder="e.g. Twice a day" required />
-                <FormField name="duration" label="Duration" placeholder="e.g. 5 days" required />
-                <div className="hidden sm:block" />
-                <div className="sm:col-span-2">
-                  <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
-                </div>
-                {rxError && (
-                  <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{rxError}</p>
-                )}
-                <div className="sm:col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Prescription
-                  </button>
-                </div>
-              </Form>
+              {({ isSubmitting, dirty }) => (
+                <Form className="grid sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
+                  </div>
+                  <FormField name="dosage" label="Dosage" placeholder="e.g. 500 mg" required />
+                  <FormField name="frequency" label="Frequency" placeholder="e.g. Twice a day" required />
+                  <FormField name="duration" label="Duration" placeholder="e.g. 5 days" required />
+                  <div className="hidden sm:block" />
+                  <div className="sm:col-span-2">
+                    <FormField name="instructions" label="Instructions" as="textarea" placeholder="e.g. After meals" rows={2} />
+                  </div>
+                  {rxError && (
+                    <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{rxError}</p>
+                  )}
+                  <div className="sm:col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setPrescribing(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Prescription'}
+                    </button>
+                  </div>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>
@@ -531,7 +539,7 @@ export function DoctorAppointments({ session }: RoleViewProps) {
                 </button>
                 <button
                   onClick={() => orderFormik.submitForm()}
-                  disabled={orderFormik.values.testIds.length === 0 || orderFormik.isSubmitting}
+                  disabled={orderFormik.values.testIds.length === 0 || !orderFormik.dirty || orderFormik.isSubmitting}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                 >
                   {orderFormik.isSubmitting ? <Spinner size="sm" label="Placing…" /> : 'Place Order'}
