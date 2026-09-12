@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useFormik } from 'formik';
 import {
   Banknote,
   Clock,
@@ -21,6 +22,7 @@ import { apiError } from '@/lib/apiError';
 import type { ConsultationBillingRow } from '@/lib/types';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
 import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
 /** How money is taken at the counter. Mirrors pricing.COUNTER_PAYMENT_MODES on
  *  the server — online payments settle themselves through the gateway. */
@@ -66,23 +68,27 @@ function Row({
 }) {
   const collected = row.status === 'completed';
   const [collecting, setCollecting] = useState(false);
-  const [method, setMethod] = useState('cash');
-  const [updatePayment, { isLoading: saving }] = useUpdatePaymentMutation();
+  const [updatePayment] = useUpdatePaymentMutation();
 
-  async function collect() {
-    try {
-      // Status and method together: "paid" without saying how is not something
-      // the day-report can reconcile against a cash drawer.
-      await updatePayment({
-        id: row.paymentId,
-        body: { status: 'completed', paymentMethod: method },
-      }).unwrap();
-      toast.success(`Collected ${fmtCurrency(row.amount)}`);
-      setCollecting(false);
-    } catch (err) {
-      toast.error(apiError(err, 'Could not record the payment'));
-    }
-  }
+  const formik = useFormik({
+    initialValues: { method: 'cash' },
+    onSubmit: async (values, { setSubmitting }) => {
+      try {
+        // Status and method together: "paid" without saying how is not something
+        // the day-report can reconcile against a cash drawer.
+        await updatePayment({
+          id: row.paymentId,
+          body: { status: 'completed', paymentMethod: values.method },
+        }).unwrap();
+        toast.success(`Collected ${fmtCurrency(row.amount)}`);
+        setCollecting(false);
+      } catch (err) {
+        toast.error(apiError(err, 'Could not record the payment'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
   return (
     <tr className="border-b hover:bg-slate-50 transition">
       <td className="py-3 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
@@ -122,8 +128,9 @@ function Row({
             collecting ? (
               <>
                 <select
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
+                  name="method"
+                  value={formik.values.method}
+                  onChange={formik.handleChange}
                   className="border border-slate-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500"
                 >
                   {COUNTER_METHODS.map((m) => (
@@ -131,14 +138,16 @@ function Row({
                   ))}
                 </select>
                 <button
-                  onClick={collect}
-                  disabled={saving}
+                  type="button"
+                  onClick={() => formik.submitForm()}
+                  disabled={formik.isSubmitting}
                   className="text-xs font-medium bg-green-600 text-white px-2.5 py-1 rounded-lg hover:bg-green-700 transition disabled:opacity-60"
                 >
-                  {saving ? 'Saving…' : 'Confirm'}
+                  {formik.isSubmitting ? 'Saving…' : 'Confirm'}
                 </button>
                 <button
-                  onClick={() => setCollecting(false)}
+                  type="button"
+                  onClick={() => { setCollecting(false); formik.resetForm(); }}
                   className="text-xs text-slate-500 px-1.5 py-1 hover:text-slate-700"
                 >
                   Cancel
@@ -173,14 +182,15 @@ function Row({
  *  the endpoint enforces. A viewer without it still sees what is outstanding;
  *  they just cannot say it has been paid. */
 export function ConsultationBillingContent({ canCollect = false }: { canCollect?: boolean } = {}) {
-  const [selectedDate, setSelectedDate] = useState<string>(todayIso());
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayIso(), to: todayIso() });
 
   const { data: summary, isLoading, isFetching } = useGetConsultationBillingSummaryQuery(
-    { date: selectedDate },
+    { dateFrom: dateRange.from || undefined, dateTo: dateRange.to || undefined },
     { refetchOnMountOrArgChange: true },
   );
 
-  const isToday = selectedDate === todayIso();
+  const isToday = dateRange.from === todayIso() && dateRange.to === todayIso();
+  const rangeLabel = dateRange.from === dateRange.to ? dateRange.from : `${dateRange.from} to ${dateRange.to}`;
 
   if (isLoading) {
     return (
@@ -194,17 +204,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <label htmlFor="consultation-billing-date" className="text-sm font-medium text-slate-700">
-            Date
-          </label>
-          <input
-            id="consultation-billing-date"
-            type="date"
-            value={selectedDate}
-            max={todayIso()}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayIso()} max={todayIso()} />
           {isToday && (
             <span className="text-xs font-medium bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded-full">
               Today
@@ -254,7 +254,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
         <div className="px-6 py-4 border-b flex items-center gap-2">
           <ReceiptText className="w-4 h-4 text-slate-500" />
           <h3 className="font-semibold text-slate-900">
-            Consultations — {selectedDate}
+            Consultations — {rangeLabel}
             {summary && summary.billCount > 0 && (
               <span className="ml-2 text-sm font-normal text-slate-500">
                 ({summary.billCount} transaction{summary.billCount !== 1 ? 's' : ''})
@@ -266,7 +266,7 @@ export function ConsultationBillingContent({ canCollect = false }: { canCollect?
         {!summary || summary.rows.length === 0 ? (
           <div className="text-center py-16">
             <Receipt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">No consultation bills for this date.</p>
+            <p className="text-slate-500 text-sm">No consultation bills for this period.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

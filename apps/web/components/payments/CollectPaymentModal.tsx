@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { Formik, Form } from 'formik';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { apiError } from '@/lib/apiError';
@@ -40,27 +40,9 @@ export function CollectPaymentModal({
    *  what actually happened at the counter are different facts. */
   defaultMode?: CounterPaymentMode;
 }) {
-  const [mode, setMode] = useState<CounterPaymentMode>(defaultMode);
-  const [updatePayment, { isLoading }] = useUpdatePaymentMutation();
-
-  useEffect(() => {
-    if (open) setMode(defaultMode);
-  }, [open, defaultMode]);
+  const [updatePayment] = useUpdatePaymentMutation();
 
   if (!open) return null;
-
-  async function collect() {
-    try {
-      await updatePayment({
-        id: paymentId,
-        body: { status: 'completed', paymentMethod: mode },
-      }).unwrap();
-      toast.success(`Collected ${formatINR(amount, { paise: false })}`);
-      onClose();
-    } catch (err) {
-      toast.error(apiError(err, 'Could not record the payment'));
-    }
-  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -75,43 +57,67 @@ export function CollectPaymentModal({
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-5">
-          <div className="flex items-baseline justify-between bg-slate-50 rounded-lg px-4 py-3">
-            <div>
-              <p className="text-xs text-slate-500">Amount due</p>
-              {patientName && <p className="text-sm text-slate-700 mt-0.5">{patientName}</p>}
-            </div>
-            <p className="text-2xl font-bold text-slate-900 tabular-nums">
-              {formatINR(amount, { paise: false })}
-            </p>
-          </div>
+        <Formik
+          initialValues={{ mode: defaultMode }}
+          enableReinitialize
+          onSubmit={async (values, { setSubmitting }) => {
+            try {
+              await updatePayment({
+                id: paymentId,
+                body: { status: 'completed', paymentMethod: values.mode },
+              }).unwrap();
+              toast.success(`Collected ${formatINR(amount, { paise: false })}`);
+              onClose();
+            } catch (err) {
+              toast.error(apiError(err, 'Could not record the payment'));
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+        >
+          {({ values, setFieldValue, isSubmitting }) => (
+            <Form>
+              <div className="px-6 py-5 space-y-5">
+                <div className="flex items-baseline justify-between bg-slate-50 rounded-lg px-4 py-3">
+                  <div>
+                    <p className="text-xs text-slate-500">Amount due</p>
+                    {patientName && <p className="text-sm text-slate-700 mt-0.5">{patientName}</p>}
+                  </div>
+                  <p className="text-2xl font-bold text-slate-900 tabular-nums">
+                    {formatINR(amount, { paise: false })}
+                  </p>
+                </div>
 
-          <PaymentModeField
-            allowOnline={false}
-            value={mode}
-            onChange={setMode}
-            label="Collected By"
-            disabled={isLoading}
-            note="Records the payment as collected. The day-report reconciles against this."
-          />
-        </div>
+                <PaymentModeField
+                  allowOnline={false}
+                  value={values.mode}
+                  onChange={(mode) => setFieldValue('mode', mode)}
+                  label="Collected By"
+                  disabled={isSubmitting}
+                  note="Records the payment as collected. The day-report reconciles against this."
+                />
+              </div>
 
-        <div className="flex justify-end gap-3 px-6 py-4 border-t">
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 disabled:opacity-60"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={collect}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-60"
-          >
-            {isLoading ? <Spinner size="sm" label="Recording…" /> : 'Mark Paid'}
-          </button>
-        </div>
+              <div className="flex justify-end gap-3 px-6 py-4 border-t">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-60"
+                >
+                  {isSubmitting ? <Spinner size="sm" label="Recording…" /> : 'Mark Paid'}
+                </button>
+              </div>
+            </Form>
+          )}
+        </Formik>
       </div>
     </div>
   );

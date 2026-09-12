@@ -692,9 +692,12 @@ class Payment(Base):
     appointment_id = Column(String, index=True, nullable=True)
     # medication_order_id is set for pharmacy billing.
     medication_order_id = Column(String, index=True, nullable=True)
+    # injection_order_id is set for injectable billing, test_order_id for lab billing.
+    injection_order_id = Column(String, index=True, nullable=True)
+    test_order_id = Column(String, index=True, nullable=True)
     patient_id = Column(String, index=True, nullable=False)
     amount = Column(Float, nullable=False)
-    # consultation | pharmacy | lab
+    # consultation | pharmacy | lab | injectable
     payment_type = Column(String, default="consultation")
     status = Column(String, default="pending")  # pending | completed | failed
     payment_method = Column(String, default="")  # cash | razorpay

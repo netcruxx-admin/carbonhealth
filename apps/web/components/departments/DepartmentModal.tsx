@@ -143,7 +143,7 @@ export function DepartmentModal({
             }
           }}
         >
-          {({ isSubmitting }) => (
+          {({ isSubmitting, dirty }) => (
             <Form className="space-y-4">
               <FormField name="name" label="Name" placeholder="e.g. Cardiology" autoFocus required />
               <FormField
@@ -162,7 +162,7 @@ export function DepartmentModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !dirty}
                   className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-semibold hover:shadow-lg transition disabled:opacity-50"
                 >
                   {isSubmitting ? <Spinner size="sm" label="Saving…" /> : isEditing ? 'Save Changes' : 'Add Department'}

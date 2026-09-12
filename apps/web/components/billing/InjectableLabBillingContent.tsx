@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   Banknote,
+  Clock,
   CreditCard,
   IndianRupee,
   Loader2,
@@ -10,12 +11,13 @@ import {
   QrCode,
   Receipt,
   ReceiptText,
+  Syringe,
+  TestTube,
 } from 'lucide-react';
-import { DashboardShell } from '@/components/DashboardShell';
-import type { RoleViewProps } from '@/components/RoleView';
-import { useGetPharmacyBillingSummaryQuery } from '@/store/api';
-import type { PharmacyBillingRow } from '@/lib/types';
+import { useGetInjectableLabBillingSummaryQuery } from '@/store/api';
+import type { InjectableLabBillingRow } from '@/lib/types';
 import { openInvoicePrint } from '@/components/payments/printInvoice';
+import { CollectPaymentModal } from '@/components/payments/CollectPaymentModal';
 import { fmtCurrency, fmtTime, methodBadgeClass, methodLabel, todayIso } from './billingFormat';
 import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 
@@ -48,9 +50,35 @@ function KpiCard({ label, amount, count, icon, tint }: KpiCardProps) {
   );
 }
 
+// ── category badge ───────────────────────────────────────────────────────────
+
+const CATEGORY_STYLE: Record<InjectableLabBillingRow['category'], string> = {
+  injectable: 'bg-amber-100 text-amber-700',
+  lab: 'bg-cyan-100 text-cyan-700',
+};
+
+const CATEGORY_LABEL: Record<InjectableLabBillingRow['category'], string> = {
+  injectable: 'Injectable',
+  lab: 'Lab',
+};
+
+const CATEGORY_ICON: Record<InjectableLabBillingRow['category'], React.ReactNode> = {
+  injectable: <Syringe className="w-3 h-3" />,
+  lab: <TestTube className="w-3 h-3" />,
+};
+
 // ── row ──────────────────────────────────────────────────────────────────────
 
-function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: string) => void }) {
+function Row({
+  row, onPrint, onCollect, canCollect,
+}: {
+  row: InjectableLabBillingRow;
+  onPrint: (id: string) => void;
+  onCollect: (row: InjectableLabBillingRow) => void;
+  canCollect: boolean;
+}) {
+  const collected = row.status === 'completed';
+
   return (
     <tr className="border-b hover:bg-slate-50 transition">
       <td className="py-3 px-4 text-xs font-mono text-slate-500 whitespace-nowrap">
@@ -60,37 +88,53 @@ function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: s
         {fmtTime(row.createdAt)}
       </td>
       <td className="py-3 px-4">
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${CATEGORY_STYLE[row.category]}`}>
+          {CATEGORY_ICON[row.category]}
+          {CATEGORY_LABEL[row.category]}
+        </span>
+      </td>
+      <td className="py-3 px-4">
         <p className="text-sm font-medium text-slate-900">{row.patientName || '—'}</p>
         {row.patientPhone && (
           <p className="text-xs text-slate-400">{row.patientPhone}</p>
         )}
       </td>
-      <td className="py-3 px-4">
-        <p className="text-sm text-slate-800">{row.medicineName || '—'}</p>
-        {row.dosage && <p className="text-xs text-slate-400">{row.dosage}</p>}
-      </td>
+      <td className="py-3 px-4 text-sm text-slate-800">{row.description || '—'}</td>
       <td className="py-3 px-4 text-right text-sm tabular-nums text-slate-700">
         {row.quantity}
-      </td>
-      <td className="py-3 px-4 text-right text-sm tabular-nums text-slate-700">
-        {fmtCurrency(row.unitPrice)}
       </td>
       <td className="py-3 px-4 text-right text-sm font-semibold tabular-nums text-slate-900">
         {fmtCurrency(row.amount)}
       </td>
       <td className="py-3 px-4">
-        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${methodBadgeClass(row.paymentMethod)}`}>
-          {methodLabel(row.paymentMethod)}
-        </span>
+        {collected ? (
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${methodBadgeClass(row.paymentMethod)}`}>
+            {methodLabel(row.paymentMethod)}
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            Pending
+          </span>
+        )}
       </td>
-      <td className="py-3 px-4 text-right">
-        <button
-          onClick={() => onPrint(row.paymentId)}
-          title="Print invoice"
-          className="p-1.5 rounded text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition"
-        >
-          <Printer className="w-4 h-4" />
-        </button>
+      <td className="py-3 px-4">
+        <div className="flex items-center justify-end gap-2">
+          {!collected && canCollect && (
+            <button
+              onClick={() => onCollect(row)}
+              className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-lg hover:bg-green-100 transition"
+            >
+              Mark Paid
+            </button>
+          )}
+          <button
+            onClick={() => onPrint(row.paymentId)}
+            title="Print invoice"
+            className="p-1.5 rounded text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -98,15 +142,20 @@ function BillingRow({ row, onPrint }: { row: PharmacyBillingRow; onPrint: (id: s
 
 // ── main component ────────────────────────────────────────────────────────────
 
-/** The pharmacy day-report on its own, with no page chrome.
+/** The combined injectables + lab tests day-report.
  *
- *  Split out from the page component so the Billing screen can show it beside
- *  the consultation report under a tab, rather than the two living at separate
- *  URLs with duplicate date pickers. */
-export function PharmacyBillingContent() {
+ *  Both bill themselves the moment a nurse administers a shot or lab staff
+ *  complete a test order — a `pending` Payment appears here with no method
+ *  yet, exactly like a consultation. Nurses and lab staff never collect
+ *  money; the front desk does that from this tab with the same `payments.manage`
+ *  gate the consultation tab uses. Its printed bill is always the plain
+ *  (no-letterhead) template — see `forcePlain` on the invoice print route —
+ *  so it needs no print plumbing of its own here. */
+export function InjectableLabBillingContent({ canCollect = false }: { canCollect?: boolean } = {}) {
   const [dateRange, setDateRange] = useState<DateRange>({ from: todayIso(), to: todayIso() });
+  const [collecting, setCollecting] = useState<InjectableLabBillingRow | null>(null);
 
-  const { data: summary, isLoading, isFetching } = useGetPharmacyBillingSummaryQuery(
+  const { data: summary, isLoading, isFetching } = useGetInjectableLabBillingSummaryQuery(
     { dateFrom: dateRange.from || undefined, dateTo: dateRange.to || undefined },
     { refetchOnMountOrArgChange: true },
   );
@@ -141,7 +190,7 @@ export function PharmacyBillingContent() {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KpiCard
             label="Total Collected"
             amount={summary?.total ?? 0}
@@ -167,6 +216,14 @@ export function PharmacyBillingContent() {
             icon={<CreditCard className="w-5 h-5" />}
             tint="text-blue-600 bg-blue-50"
           />
+          {/* Billed but not collected. The number the desk works down before close
+              of day, so it sits with the takings rather than inside the table. */}
+          <KpiCard
+            label="Pending Collection"
+            amount={summary?.pendingTotal ?? 0}
+            icon={<Clock className="w-5 h-5" />}
+            tint="text-amber-600 bg-amber-50"
+          />
         </div>
 
         {/* transactions table */}
@@ -186,7 +243,7 @@ export function PharmacyBillingContent() {
           {!summary || summary.rows.length === 0 ? (
             <div className="text-center py-16">
               <Receipt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">No pharmacy bills for this period.</p>
+              <p className="text-slate-500 text-sm">No injectable or lab bills for this period.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -195,24 +252,30 @@ export function PharmacyBillingContent() {
                   <tr className="border-b bg-slate-50 text-xs font-semibold text-slate-600 uppercase tracking-wide">
                     <th className="py-3 px-4">Invoice</th>
                     <th className="py-3 px-4">Time</th>
+                    <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4">Patient</th>
-                    <th className="py-3 px-4">Medicine</th>
+                    <th className="py-3 px-4">Description</th>
                     <th className="py-3 px-4 text-right">Qty</th>
-                    <th className="py-3 px-4 text-right">Unit Price</th>
                     <th className="py-3 px-4 text-right">Amount</th>
-                    <th className="py-3 px-4">Method</th>
+                    <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Print</th>
                   </tr>
                 </thead>
                 <tbody>
                   {summary.rows.map((row) => (
-                    <BillingRow key={row.paymentId} row={row} onPrint={openInvoicePrint} />
+                    <Row
+                      key={row.paymentId}
+                      row={row}
+                      onPrint={openInvoicePrint}
+                      onCollect={setCollecting}
+                      canCollect={canCollect}
+                    />
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t bg-slate-50">
                     <td colSpan={6} className="py-3 px-4 text-sm font-semibold text-slate-700 text-right">
-                      Total
+                      Collected
                     </td>
                     <td className="py-3 px-4 text-right text-sm font-bold text-slate-900 tabular-nums">
                       {fmtCurrency(summary.total)}
@@ -224,20 +287,14 @@ export function PharmacyBillingContent() {
             </div>
           )}
         </div>
-      </div>
-  );
-}
 
-/** The pharmacist's standalone screen, kept for direct use. */
-export function PharmacyBillingPage({ session }: RoleViewProps) {
-  return (
-    <DashboardShell
-      role={session.user.role}
-      userName={session.user.name}
-      title="Pharmacy Billing"
-      subtitle="Daily collections and billing summary"
-    >
-      <PharmacyBillingContent />
-    </DashboardShell>
+        <CollectPaymentModal
+          open={collecting !== null}
+          onClose={() => setCollecting(null)}
+          paymentId={collecting?.paymentId ?? ''}
+          amount={collecting?.amount ?? 0}
+          patientName={collecting?.patientName}
+        />
+      </div>
   );
 }

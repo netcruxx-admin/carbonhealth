@@ -109,7 +109,7 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
             }
           }}
         >
-          {({ isSubmitting }) => (
+          {({ isSubmitting, dirty }) => (
             <Form className="space-y-4">
               {isNewVisit && (
                 <div className="grid sm:grid-cols-2 gap-4 pb-4 border-b border-slate-100">
@@ -149,7 +149,7 @@ export function ClinicalNotesSection({ appointmentId, patientId, doctorId, recor
               )}
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !dirty}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
               >
                 {isSubmitting ? <Spinner size="sm" label="Saving…" /> : record ? 'Update Notes' : 'Save Notes'}

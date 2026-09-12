@@ -1,12 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { Formik, Form } from 'formik';
+import * as Yup from 'yup';
 import { toast } from 'sonner';
 import { Syringe, Plus, X, Search, AlertTriangle } from 'lucide-react';
 import { apiError } from '@/lib/apiError';
 import type { InjectionOrder, InjectionOrderStatus } from '@/lib/types';
 import { INJECTION_ROUTES } from '@/lib/types';
 import { DashboardShell } from '@/components/DashboardShell';
+import { FormField } from '@/components/form/FormField';
 import type { RoleViewProps } from '@/components/RoleView';
 import { hasPermission } from '@/lib/auth';
 import {
@@ -70,18 +73,38 @@ const EMPTY_FORM: NewOrderForm = {
   instructions: '',
 };
 
+const orderSchema = Yup.object({
+  patientId: Yup.string().required('Select a patient'),
+  injectableName: Yup.string().trim().required('Name the injectable'),
+  route: Yup.string().required('Select a route'),
+  quantity: Yup.string().test('qty', 'Quantity must be a whole number of at least 1', (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1;
+  }),
+});
+
+interface GiveForm {
+  site: string;
+  quantity: string;
+  notes: string;
+}
+
+const giveSchema = Yup.object({
+  site: Yup.string().trim().required('Record the injection site (e.g. Left deltoid, IV line A)'),
+  quantity: Yup.string().test('qty', 'Quantity must be a whole number of at least 1', (v) => {
+    const n = Number(v);
+    return Number.isInteger(n) && n >= 1;
+  }),
+});
+
 export function InjectionOrders({ session }: RoleViewProps) {
   const role = session.user.role;
   const [activeTab, setActiveTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
   const [newOrderOpen, setNewOrderOpen] = useState(false);
-  const [form, setForm] = useState<NewOrderForm>(EMPTY_FORM);
   const [formError, setFormError] = useState('');
 
   const [giving, setGiving] = useState<InjectionOrder | null>(null);
-  const [site, setSite] = useState('');
-  const [giveNotes, setGiveNotes] = useState('');
-  const [giveQty, setGiveQty] = useState('');
 
   const canOrder = hasPermission(session, 'injection_orders.manage');
   const canAdminister = hasPermission(session, 'injection_orders.administer');
@@ -105,75 +128,8 @@ export function InjectionOrders({ session }: RoleViewProps) {
     [orders],
   );
 
-  const pickInjectable = (id: string) => {
-    const item = injectables.find((i) => i.id === id);
-    setForm((f) => ({
-      ...f,
-      injectableId: id,
-      injectableName: item ? item.name : f.injectableName,
-      dose: item?.strength || f.dose,
-      route: item?.route || f.route,
-    }));
-  };
-
-  const handleCreate = async () => {
-    setFormError('');
-    if (!form.patientId) return setFormError('Select a patient');
-    if (!form.injectableName.trim()) return setFormError('Name the injectable');
-    if (!form.route) return setFormError('Select a route');
-    const quantity = Number(form.quantity);
-    if (!Number.isInteger(quantity) || quantity < 1) {
-      return setFormError('Quantity must be a whole number of at least 1');
-    }
-    try {
-      await createOrder({
-        patientId: form.patientId,
-        injectableId: form.injectableId || undefined,
-        injectableName: form.injectableName.trim(),
-        dose: form.dose.trim(),
-        route: form.route,
-        quantity,
-        scheduledFor: form.scheduledFor || undefined,
-        instructions: form.instructions.trim() || undefined,
-      }).unwrap();
-      toast.success('Injection ordered');
-      setNewOrderOpen(false);
-      setForm(EMPTY_FORM);
-    } catch (err) {
-      setFormError(apiError(err, 'Failed to order injection'));
-    }
-  };
-
   const openGive = (order: InjectionOrder) => {
     setGiving(order);
-    setSite('');
-    setGiveNotes('');
-    setGiveQty(String(order.quantity));
-  };
-
-  const handleGive = async () => {
-    if (!giving) return;
-    if (!site.trim()) {
-      toast.error('Record the injection site (e.g. Left deltoid, IV line A)');
-      return;
-    }
-    const qty = Number(giveQty);
-    if (!Number.isInteger(qty) || qty < 1) {
-      toast.error('Quantity must be a whole number of at least 1');
-      return;
-    }
-    try {
-      await administerOrder({
-        id: giving.id,
-        site: site.trim(),
-        notes: giveNotes.trim() || undefined,
-        quantity: qty,
-      }).unwrap();
-      toast.success('Shot marked as given');
-      setGiving(null);
-    } catch (err) {
-      toast.error(apiError(err, 'Failed to record administration'));
-    }
   };
 
   const handleCancel = async (id: string) => {
@@ -231,7 +187,7 @@ export function InjectionOrders({ session }: RoleViewProps) {
 
           {canOrder && role === doctorRole && (
             <button
-              onClick={() => { setForm(EMPTY_FORM); setFormError(''); setNewOrderOpen(true); }}
+              onClick={() => { setFormError(''); setNewOrderOpen(true); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg text-sm font-medium hover:shadow-lg transition ml-auto"
             >
               <Plus className="w-4 h-4" />
@@ -336,124 +292,109 @@ export function InjectionOrders({ session }: RoleViewProps) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Patient *</label>
-                <select
-                  value={form.patientId}
-                  onChange={(e) => setForm((f) => ({ ...f, patientId: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Select patient…</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>{p.user?.name ?? p.userId}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">From catalogue</label>
-                <select
-                  value={form.injectableId}
-                  onChange={(e) => pickInjectable(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Not stocked — enter a name below</option>
-                  {injectables.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {[i.name, i.strength, i.form].filter(Boolean).join(' · ')} ({i.stock} in stock)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Injectable name *</label>
-                <input
-                  value={form.injectableName}
-                  onChange={(e) => setForm((f) => ({ ...f, injectableName: e.target.value, injectableId: '' }))}
-                  placeholder="e.g. Tetanus toxoid"
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Dose</label>
-                  <input
-                    value={form.dose}
-                    onChange={(e) => setForm((f) => ({ ...f, dose: e.target.value }))}
-                    placeholder="e.g. 0.5 mL"
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+            <Formik<NewOrderForm>
+              initialValues={EMPTY_FORM}
+              validationSchema={orderSchema}
+              onSubmit={async (values, { setSubmitting }) => {
+                setFormError('');
+                try {
+                  await createOrder({
+                    patientId: values.patientId,
+                    injectableId: values.injectableId || undefined,
+                    injectableName: values.injectableName.trim(),
+                    dose: values.dose.trim(),
+                    route: values.route,
+                    quantity: Number(values.quantity),
+                    scheduledFor: values.scheduledFor || undefined,
+                    instructions: values.instructions.trim() || undefined,
+                  }).unwrap();
+                  toast.success('Injection ordered');
+                  setNewOrderOpen(false);
+                } catch (err) {
+                  setFormError(apiError(err, 'Failed to order injection'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {({ setFieldValue, isSubmitting, dirty }) => (
+                <Form className="grid gap-4">
+                  <FormField
+                    name="patientId"
+                    label="Patient"
+                    as="select"
+                    required
+                    placeholder="Select patient…"
+                    options={patients.map((p) => ({ value: p.id, label: p.user?.name ?? p.userId }))}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Route *</label>
-                  <select
-                    value={form.route}
-                    onChange={(e) => setForm((f) => ({ ...f, route: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  >
-                    {INJECTION_ROUTES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Qty *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.quantity}
-                    onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">From catalogue</label>
+                    <select
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        const item = injectables.find((i) => i.id === id);
+                        setFieldValue('injectableId', id);
+                        if (item) {
+                          setFieldValue('injectableName', item.name);
+                          if (item.strength) setFieldValue('dose', item.strength);
+                          if (item.route) setFieldValue('route', item.route);
+                        }
+                      }}
+                      className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    >
+                      <option value="">Not stocked — enter a name below</option>
+                      {injectables.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {[i.name, i.strength, i.form].filter(Boolean).join(' · ')} ({i.stock} in stock)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <FormField
+                    name="injectableName"
+                    label="Injectable name"
+                    required
+                    placeholder="e.g. Tetanus toxoid"
+                    onValueChange={() => setFieldValue('injectableId', '')}
                   />
-                  <p className="text-xs text-slate-400 mt-1">Vials used</p>
-                </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Scheduled for</label>
-                <input
-                  type="date"
-                  value={form.scheduledFor}
-                  onChange={(e) => setForm((f) => ({ ...f, scheduledFor: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-              </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <FormField name="dose" label="Dose" placeholder="e.g. 0.5 mL" />
+                    <FormField name="route" label="Route" as="select" required options={INJECTION_ROUTES.map((r) => ({ value: r, label: r }))} />
+                    <div>
+                      <FormField name="quantity" label="Qty" type="number" min="1" required />
+                      <p className="text-xs text-slate-400 mt-1">Vials used</p>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Instructions</label>
-                <textarea
-                  value={form.instructions}
-                  onChange={(e) => setForm((f) => ({ ...f, instructions: e.target.value }))}
-                  placeholder="Special instructions…"
-                  rows={2}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                />
-              </div>
+                  <FormField name="scheduledFor" label="Scheduled for" type="date" />
+                  <FormField name="instructions" label="Instructions" as="textarea" rows={2} placeholder="Special instructions…" />
 
-              {formError && (
-                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>
+                  {formError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{formError}</p>
+                  )}
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewOrderOpen(false)}
+                      className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !dirty || isCreating}
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting || isCreating ? <Spinner size="sm" label="Ordering…" /> : 'Order Injection'}
+                    </button>
+                  </div>
+                </Form>
               )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setNewOrderOpen(false)}
-                  className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={isCreating}
-                  className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
-                >
-                  {isCreating ? <Spinner size="sm" label="Ordering…" /> : 'Order Injection'}
-                </button>
-              </div>
-            </div>
+            </Formik>
           </div>
         </div>
       )}
@@ -474,59 +415,57 @@ export function InjectionOrders({ session }: RoleViewProps) {
               <span className="font-medium text-slate-700">({giving.route})</span> to{' '}
               <span className="font-semibold">{giving.patientName ?? giving.patientId}</span>.
             </p>
-            <div className="grid gap-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Injection site <span className="text-red-500">*</span>
-                </label>
-                <input
-                  value={site}
-                  onChange={(e) => setSite(e.target.value)}
-                  placeholder="e.g. Left deltoid, Right thigh, IV line A"
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Vials used</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={giveQty}
-                  onChange={(e) => setGiveQty(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                />
-                {giving.injectableId != null && giving.stockOnHand != null && (
-                  <p className="text-xs text-slate-400 mt-1">{giving.stockOnHand} in stock</p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Notes (optional)</label>
-                <textarea
-                  value={giveNotes}
-                  onChange={(e) => setGiveNotes(e.target.value)}
-                  placeholder="e.g. Tolerated well, no adverse reaction…"
-                  rows={2}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setGiving(null)}
-                className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGive}
-                disabled={isGiving}
-                className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
-              >
-                {isGiving ? <Spinner size="sm" label="Saving…" /> : 'Mark Given'}
-              </button>
-            </div>
+            <Formik<GiveForm>
+              initialValues={{ site: '', quantity: String(giving.quantity), notes: '' }}
+              validationSchema={giveSchema}
+              onSubmit={async (values, { setSubmitting }) => {
+                try {
+                  await administerOrder({
+                    id: giving.id,
+                    site: values.site.trim(),
+                    notes: values.notes.trim() || undefined,
+                    quantity: Number(values.quantity),
+                  }).unwrap();
+                  toast.success('Shot marked as given');
+                  setGiving(null);
+                } catch (err) {
+                  toast.error(apiError(err, 'Failed to record administration'));
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {({ isSubmitting, dirty }) => (
+                <Form>
+                  <div className="grid gap-3 mb-4">
+                    <FormField name="site" label="Injection site" required placeholder="e.g. Left deltoid, Right thigh, IV line A" autoFocus />
+                    <div>
+                      <FormField name="quantity" label="Vials used" type="number" min="1" />
+                      {giving.injectableId != null && giving.stockOnHand != null && (
+                        <p className="text-xs text-slate-400 mt-1">{giving.stockOnHand} in stock</p>
+                      )}
+                    </div>
+                    <FormField name="notes" label="Notes (optional)" as="textarea" rows={2} placeholder="e.g. Tolerated well, no adverse reaction…" />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setGiving(null)}
+                      className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !dirty || isGiving}
+                      className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
+                    >
+                      {isSubmitting || isGiving ? <Spinner size="sm" label="Saving…" /> : 'Mark Given'}
+                    </button>
+                  </div>
+                </Form>
+              )}
+            </Formik>
           </div>
         </div>
       )}

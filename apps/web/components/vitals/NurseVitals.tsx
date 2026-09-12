@@ -21,6 +21,7 @@ import {
 } from '@/components/vitals/vitalsForm';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { fmtDate } from '@/lib/date';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -54,17 +55,18 @@ function NurseVitalsInner({ session }: RoleViewProps) {
   const searchParams = useSearchParams();
   const apptParam = searchParams.get('appt');
 
-  const [date, setDate] = useState<string>(todayStr);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const [recording, setRecording] = useState<ApptRow | null>(null);
   const [toast, setToast] = useState('');
-  const table = useServerTable({ filterKey: date });
+  const table = useServerTable({ filterKey: `${dateRange.from}|${dateRange.to}` });
 
   // A cancelled visit has no vitals to record, so the API is asked for the two
   // statuses that do rather than for everything.
   const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
     q: table.q.trim() || undefined,
     status: 'scheduled,completed',
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     limit: table.limit,
     offset: table.offset,
   });
@@ -106,17 +108,7 @@ function NurseVitalsInner({ session }: RoleViewProps) {
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold">
-              Clear date
-            </button>
-          )}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
         </div>
 
         <div className="bg-white rounded-lg shadow">
@@ -222,22 +214,24 @@ function NurseVitalsInner({ session }: RoleViewProps) {
                 flash('Vitals recorded');
               }}
             >
-              <Form className="p-6 grid grid-cols-2 gap-4">
-                <VitalsFormFields />
-                {error && (
-                  <div className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                    {error}
+              {({ isSubmitting, dirty }) => (
+                <Form className="p-6 grid grid-cols-2 gap-4">
+                  <VitalsFormFields />
+                  {error && (
+                    <div className="col-span-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {error}
+                    </div>
+                  )}
+                  <div className="col-span-2 flex gap-3 pt-2">
+                    <button type="button" onClick={() => setRecording(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={isSubmitting || !dirty} className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50">
+                      {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}
+                    </button>
                   </div>
-                )}
-                <div className="col-span-2 flex gap-3 pt-2">
-                  <button type="button" onClick={() => setRecording(null)} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition">
-                    Save Vitals
-                  </button>
-                </div>
-              </Form>
+                </Form>
+              )}
             </Formik>
           </div>
         </div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Formik, Form } from 'formik';
+import { Formik, Form, useFormik } from 'formik';
 import * as Yup from 'yup';
 import { toast } from 'sonner';
 import {
@@ -40,6 +40,7 @@ import {
   vitalsToPayload,
 } from '@/components/vitals/vitalsForm';
 import { FollowUpModal } from '@/components/FollowUpModal';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { ActionIcon } from '@/components/ActionIcon';
 import { ExportButton } from '@/components/ExportButton';
 import { useDebounced } from '@/hooks/useDebounced';
@@ -188,7 +189,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [query, setQuery] = useState('');
   // Today by default — this is the day's board, not the full history; Clear
   // (next to the date picker below) opens it back up to every date.
-  const [date, setDate] = useState(todayStr);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const [page, setPage] = useState(1);
   const { sort, toggle, token: sortToken } = useAppointmentSort();
 
@@ -197,7 +198,8 @@ export function AdminAppointments({ session }: RoleViewProps) {
     q: debouncedQuery.trim() || undefined,
     status: status === 'all' ? undefined : status,
     departmentId: deptId === 'all' ? undefined : deptId,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
   };
   const { data: page_, isLoading } = useListAppointmentsPagedQuery({
@@ -214,16 +216,13 @@ export function AdminAppointments({ session }: RoleViewProps) {
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [followUp, setFollowUp] = useState<Appointment | null>(null);
   const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
-  const [reDate, setReDate] = useState('');
-  const [reTime, setReTime] = useState('');
-  const [reSaving, setReSaving] = useState(false);
   const [addingVitals, setAddingVitals] = useState<Appointment | null>(null);
   const [deleting, setDeleting] = useState<Appointment | null>(null);
   const [collecting, setCollecting] = useState<Appointment | null>(null);
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, status, deptId, date, sortToken]);
+  }, [debouncedQuery, status, deptId, dateRange.from, dateRange.to, sortToken]);
 
   const doctorName = useCallback(
     (id: string) => {
@@ -259,27 +258,28 @@ export function AdminAppointments({ session }: RoleViewProps) {
     label: `Dr. ${d.user?.name ?? 'Doctor'}`,
   }));
 
-  const openReschedule = (a: Appointment) => {
-    setReDate(a.date);
-    setReTime(a.time);
-    setRescheduling(a);
-  };
+  const rescheduleFormik = useFormik({
+    initialValues: { date: '', time: '' },
+    onSubmit: async (values, { setSubmitting }) => {
+      if (!rescheduling || !values.date || !values.time) { setSubmitting(false); return; }
+      try {
+        await updateAppointment({
+          id: rescheduling.id,
+          body: { date: values.date, time: values.time },
+        }).unwrap();
+        setRescheduling(null);
+        toast.success('Appointment rescheduled');
+      } catch (err) {
+        toast.error(apiError(err, 'Could not reschedule the appointment'));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+  });
 
-  const saveReschedule = async () => {
-    if (!rescheduling || !reDate || !reTime) return;
-    setReSaving(true);
-    try {
-      await updateAppointment({
-        id: rescheduling.id,
-        body: { date: reDate, time: reTime },
-      }).unwrap();
-      setRescheduling(null);
-      toast.success('Appointment rescheduled');
-    } catch (err) {
-      toast.error(apiError(err, 'Could not reschedule the appointment'));
-    } finally {
-      setReSaving(false);
-    }
+  const openReschedule = (a: Appointment) => {
+    rescheduleFormik.setValues({ date: a.date, time: a.time });
+    setRescheduling(a);
   };
 
   const confirmDelete = async () => {
@@ -294,10 +294,10 @@ export function AdminAppointments({ session }: RoleViewProps) {
   };
 
   const reBooked = rescheduling
-    ? bookedSlotsForDoctor(appointments, rescheduling.doctorId, reDate, rescheduling.id)
+    ? bookedSlotsForDoctor(appointments, rescheduling.doctorId, rescheduleFormik.values.date, rescheduling.id)
     : new Set<string>();
   const reBlocked = rescheduling
-    ? blockedSlotSet(scheduleBlocks, rescheduling.doctorId, reDate, SLOTS)
+    ? blockedSlotSet(scheduleBlocks, rescheduling.doctorId, rescheduleFormik.values.date, SLOTS)
     : new Set<string>();
   const breakSlots = useBreakSlots(SLOTS);
 
@@ -368,19 +368,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-white rounded-lg shadow px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-            {date && (
-              <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
-                Clear
-              </button>
-            )}
-          </div>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
           <div className="ml-auto flex items-center gap-2">
             <ExportButton
               filename="appointments"
@@ -575,7 +563,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting, status }) => (
+              {({ isSubmitting, status, dirty }) => (
                 <Form className="space-y-4">
                   <FormField name="doctorId" label="Doctor" as="select" placeholder="Select a doctor" options={doctorOptions} required />
                   <FormField name="status" label="Status" as="select" placeholder="Select status" options={statusOptions} required />
@@ -589,7 +577,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !dirty}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}
@@ -617,21 +605,21 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
                 <Calendar
                   mode="single"
-                  selected={reDate ? new Date(`${reDate}T00:00:00`) : undefined}
-                  onSelect={(d) => { setReDate(d ? toDateStr(d) : ''); setReTime(''); }}
+                  selected={rescheduleFormik.values.date ? new Date(`${rescheduleFormik.values.date}T00:00:00`) : undefined}
+                  onSelect={(d) => rescheduleFormik.setValues({ date: d ? toDateStr(d) : '', time: '' })}
                   disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
                   className="[--cell-size:2rem] rounded-lg border border-slate-200 w-full max-w-full overflow-hidden"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Time slot</label>
-                {!reDate ? (
+                {!rescheduleFormik.values.date ? (
                   <div className="min-h-[180px] flex items-center justify-center text-slate-400 text-sm border border-dashed border-slate-300 rounded-lg">Pick a date</div>
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     {SLOTS.map((slot) => {
-                      const st = slotStatus(slot, reDate, reBooked, reBlocked, breakSlots);
-                      const selected = reTime === slot && st === 'available';
+                      const st = slotStatus(slot, rescheduleFormik.values.date, reBooked, reBlocked, breakSlots);
+                      const selected = rescheduleFormik.values.time === slot && st === 'available';
                       const cls = selected
                         ? 'bg-cyan-600 text-white border-cyan-600'
                         : st === 'available'
@@ -640,7 +628,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                         ? 'bg-red-50 text-red-400 border-red-200 line-through cursor-not-allowed'
                         : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed';
                       return (
-                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => setReTime(slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
+                        <button key={slot} type="button" disabled={st !== 'available'} onClick={() => rescheduleFormik.setFieldValue('time', slot)} className={`px-2 py-2 rounded-lg border text-sm font-medium transition ${cls}`}>
                           {slot}
                         </button>
                       );
@@ -650,15 +638,15 @@ export function AdminAppointments({ session }: RoleViewProps) {
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setRescheduling(null)} disabled={reSaving} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
+              <button onClick={() => setRescheduling(null)} disabled={rescheduleFormik.isSubmitting} className="flex-1 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition disabled:opacity-50">
                 Cancel
               </button>
               <button
-                onClick={saveReschedule}
-                disabled={!reDate || !reTime || reSaving}
+                onClick={() => rescheduleFormik.submitForm()}
+                disabled={!rescheduleFormik.values.date || !rescheduleFormik.values.time || !rescheduleFormik.dirty || rescheduleFormik.isSubmitting}
                 className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
               >
-                {reSaving ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
+                {rescheduleFormik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Reschedule'}
               </button>
             </div>
           </div>
@@ -696,7 +684,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting, status }) => (
+              {({ isSubmitting, status, dirty }) => (
                 <Form className="grid grid-cols-2 gap-4">
                   <VitalsFormFields />
                   {status && (
@@ -708,7 +696,7 @@ export function AdminAppointments({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !dirty}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Vitals'}

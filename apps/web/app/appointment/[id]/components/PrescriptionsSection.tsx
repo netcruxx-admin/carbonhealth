@@ -242,7 +242,7 @@ function NewRxRow({
           <button
             type="button"
             onClick={() => formik.submitForm()}
-            disabled={formik.isSubmitting}
+            disabled={formik.isSubmitting || !formik.dirty}
             title="Add prescription"
             className="p-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded transition disabled:opacity-50"
           >
@@ -300,7 +300,7 @@ function EditRxForm({
         }
       }}
     >
-      {({ isSubmitting }) => (
+      {({ isSubmitting, dirty }) => (
         <Form className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <FormField name="medicineName" label="Medicine" as="select" placeholder="Select a medicine" options={medicineOptions} required />
@@ -315,7 +315,7 @@ function EditRxForm({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !dirty}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg font-semibold transition text-sm disabled:opacity-50"
             >
               {isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Save Changes'}

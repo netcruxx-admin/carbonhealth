@@ -146,7 +146,7 @@ export function ChangePasswordForm({ forced = false, onDone }: Props) {
 
         <button
           type="submit"
-          disabled={formik.isSubmitting}
+          disabled={formik.isSubmitting || !formik.dirty}
           className="inline-flex items-center justify-center gap-2 w-full rounded-lg bg-gradient-to-r from-cyan-500 to-brand-teal py-2 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
           {formik.isSubmitting ? <Spinner size="sm" label="Saving…" /> : 'Change password'}

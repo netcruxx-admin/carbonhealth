@@ -626,7 +626,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
           )}
 
           <Formik initialValues={initialValues} validationSchema={schema} onSubmit={submit} enableReinitialize>
-            {({ values, setFieldValue }) => (
+            {({ values, setFieldValue, dirty }) => (
               <Form className="space-y-6">
                 <fieldset disabled={!canEdit} className="space-y-6 disabled:opacity-70">
                   <Section icon={Building2} title="Name & branding" blurb="How your hospital appears to patients and staff.">
@@ -779,7 +779,7 @@ export function HospitalSettings({ session }: RoleViewProps) {
                   <div className="sticky bottom-0 bg-slate-50 py-4 flex justify-end border-t border-slate-200">
                     <button
                       type="submit"
-                      disabled={isSaving}
+                      disabled={isSaving || !dirty}
                       className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-brand-teal text-white text-sm font-semibold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition"
                     >
                       {isSaving ? <Spinner size="sm" label="Saving…" /> : 'Save changes'}

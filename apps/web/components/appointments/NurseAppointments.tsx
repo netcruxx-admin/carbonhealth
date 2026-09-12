@@ -12,6 +12,7 @@ import { DashboardShell } from '@/components/DashboardShell';
 import type { RoleViewProps } from '@/components/RoleView';
 import { ExportButton } from '@/components/ExportButton';
 import { ActionIcon } from '@/components/ActionIcon';
+import { DateRangeFilter, type DateRange } from '@/components/DateRangeFilter';
 import { TablePagination } from '@/components/TablePagination';
 import { useServerTable } from '@/hooks/useServerTable';
 import { SortableTh, useAppointmentSort } from './appointmentSort';
@@ -52,14 +53,15 @@ const exportRow = (r: ReturnType<typeof toRow>) => [
 export function NurseAppointments({ session }: RoleViewProps) {
   const canRecordVitals = hasPermission(session, 'vitals.record');
   const [status, setStatus] = useState<'all' | Appointment['status']>('all');
-  const [date, setDate] = useState<string>(todayStr);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: todayStr, to: todayStr });
   const { sort, toggle, token: sortToken } = useAppointmentSort();
-  const table = useServerTable({ filterKey: `${status}|${date}|${sortToken}` });
+  const table = useServerTable({ filterKey: `${status}|${dateRange.from}|${dateRange.to}|${sortToken}` });
 
   const listArgs = {
     q: table.q.trim() || undefined,
     status: status === 'all' ? undefined : status,
-    date: date || undefined,
+    dateFrom: dateRange.from || undefined,
+    dateTo: dateRange.to || undefined,
     sort: sortToken,
   };
   const { data: appointmentPage, isLoading } = useListAppointmentsPagedQuery({
@@ -85,12 +87,6 @@ export function NurseAppointments({ session }: RoleViewProps) {
               className="w-full pl-9 pr-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
             />
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="px-3 py-2 bg-white rounded-lg shadow text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-          />
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as typeof status)}
@@ -101,11 +97,7 @@ export function NurseAppointments({ session }: RoleViewProps) {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          {date && (
-            <button onClick={() => setDate('')} className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold">
-              Clear date
-            </button>
-          )}
+          <DateRangeFilter value={dateRange} onChange={setDateRange} defaultDate={todayStr} />
           <div className="ml-auto">
             <ExportButton
               filename="appointments"

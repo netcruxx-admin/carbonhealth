@@ -205,7 +205,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
               }
             }}
           >
-            {({ values, errors, touched, setFieldValue }) => (
+            {({ values, errors, touched, setFieldValue, dirty }) => (
               <Form className="space-y-6">
                 {(loadingOptions || loadingHospitals) && (
                   <Spinner variant="block" label="Loading options…" />
@@ -349,7 +349,7 @@ function SuperadminBookForm({ session }: RoleViewProps) {
                   </button>
                   <button
                     type="submit"
-                    disabled={success || !hospitalId}
+                    disabled={success || !dirty || !hospitalId}
                     className="flex-1 px-6 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded-lg hover:shadow-lg transition font-semibold disabled:opacity-50"
                   >
                     Book Appointment

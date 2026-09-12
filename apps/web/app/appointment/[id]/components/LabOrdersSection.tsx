@@ -246,7 +246,7 @@ function NewTestOrderRow({
           <button
             type="button"
             onClick={() => formik.submitForm()}
-            disabled={formik.isSubmitting}
+            disabled={formik.isSubmitting || !formik.dirty}
             title="Order test"
             className="p-1.5 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 rounded transition disabled:opacity-50"
           >

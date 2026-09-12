@@ -236,7 +236,7 @@ export function AdminTests({ session }: RoleViewProps) {
                 }
               }}
             >
-              {({ isSubmitting, status }) => (
+              {({ isSubmitting, status, dirty }) => (
                 <Form className="grid sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
                     <FormField name="name" label="Test Name" placeholder="e.g. Complete Blood Count (CBC)" autoFocus required />
@@ -256,7 +256,7 @@ export function AdminTests({ session }: RoleViewProps) {
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !dirty}
                       className="inline-flex items-center justify-center gap-2 flex-1 px-4 py-2 bg-gradient-to-r from-cyan-500 to-brand-teal text-white rounded hover:shadow-lg font-semibold transition disabled:opacity-50"
                     >
                       {isSubmitting ? <Spinner size="sm" label="Saving…" /> : editing ? 'Save Changes' : 'Add Test'}
