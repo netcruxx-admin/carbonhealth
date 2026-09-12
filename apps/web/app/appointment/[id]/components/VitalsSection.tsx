@@ -11,6 +11,7 @@ import {
   Autofill,
   VitalsFormFields,
   emptyVitals,
+  pregnancyStatusOptions,
   vitalsSchema,
   vitalsToForm,
   vitalsToPayload,
@@ -18,7 +19,13 @@ import {
 import type { Vitals } from '@/lib/types';
 import { InlineConfirmBar } from './InlineConfirm';
 
-const HEAD = ['BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'LMP', 'EDD', 'POG'];
+const HEAD = ['BP', 'Height', 'Pulse', 'Weight', 'Temp', 'BMI', 'Status', 'LMP', 'EDD', 'POG'];
+
+const PREGNANCY_LABEL: Record<string, string> = {
+  pregnant: 'Pregnant',
+  not_pregnant: 'Not Pregnant',
+  menopause: 'Menopause',
+};
 
 const cell = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-cyan-500 bg-white';
 
@@ -114,6 +121,7 @@ export function VitalsSection({ vitals, appointmentId, patientId, doctorId, canM
                   <td className="py-3 px-4 text-slate-600">{v.weight ? `${v.weight} kg` : '—'}</td>
                   <td className="py-3 px-4 text-slate-600">{v.temperature ? `${v.temperature}°F` : '—'}</td>
                   <td className="py-3 px-4 text-slate-600">{v.bmi ? `${v.bmi}` : '—'}</td>
+                  <td className="py-3 px-4 text-slate-600">{PREGNANCY_LABEL[v.pregnancyStatus] ?? '—'}</td>
                   <td className="py-3 px-4 text-slate-600">{fmtDate(v.lmp)}</td>
                   <td className="py-3 px-4 text-slate-600">{fmtDate(v.edd)}</td>
                   <td className="py-3 px-4 text-slate-600">{v.pog || '—'}</td>
@@ -205,19 +213,41 @@ function NewVitalsRow({
           <input name="weight" type="number" value={formik.values.weight} onChange={formik.handleChange} placeholder="68" className={cell} />
         </td>
         <td className="p-1.5">
-          <input name="temperature" type="number" value={formik.values.temperature} onChange={formik.handleChange} placeholder="98.6" className={cell} />
+          <input name="temperature" type="number" value={formik.values.temperature} onChange={formik.handleChange} placeholder="98.4" className={cell} />
         </td>
         <td className="p-1.5">
           <input name="bmi" type="number" value={formik.values.bmi} onChange={formik.handleChange} placeholder="auto" className={cell} />
         </td>
         <td className="p-1.5">
-          <input name="lmp" type="date" value={formik.values.lmp} onChange={formik.handleChange} className={cell} />
+          <select name="pregnancyStatus" value={formik.values.pregnancyStatus} onChange={formik.handleChange} className={cell}>
+            <option value="">Not recorded</option>
+            {pregnancyStatusOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </td>
         <td className="p-1.5">
-          <input name="edd" type="date" value={formik.values.edd} onChange={formik.handleChange} className={cell} />
+          <input name="lmp" type="date" value={formik.values.lmp} onChange={formik.handleChange} disabled={formik.values.pregnancyStatus === 'menopause'} className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`} />
         </td>
         <td className="p-1.5">
-          <input name="pog" value={formik.values.pog} onChange={formik.handleChange} placeholder="28w 3d" className={cell} />
+          <input
+            name="edd"
+            type="date"
+            value={formik.values.edd}
+            onChange={formik.handleChange}
+            disabled={formik.values.pregnancyStatus !== 'pregnant'}
+            className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`}
+          />
+        </td>
+        <td className="p-1.5">
+          <input
+            name="pog"
+            value={formik.values.pog}
+            onChange={formik.handleChange}
+            placeholder="28w 3d"
+            disabled={formik.values.pregnancyStatus !== 'pregnant'}
+            className={`${cell} disabled:bg-slate-100 disabled:text-slate-400`}
+          />
         </td>
         <td className="p-1.5 whitespace-nowrap">
           <button

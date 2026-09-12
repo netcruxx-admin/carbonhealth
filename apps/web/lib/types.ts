@@ -320,10 +320,14 @@ export interface Vitals {
   /** Auto-filled from height/weight, editable. */
   bmi: number;
   /** Obstetric triad — last menstrual period / expected date of delivery /
-   *  period of gestation, e.g. "28w 3d". */
+   *  period of gestation, e.g. "28w 3d". EDD/POG are only meaningful when
+   *  `pregnancyStatus` is "pregnant" — LMP alone does not imply pregnancy,
+   *  and a blank LMP does not imply menopause, so neither is inferred from it. */
   lmp: string;
   edd: string;
   pog: string;
+  /** "" (not recorded) | "pregnant" | "not_pregnant" | "menopause". */
+  pregnancyStatus: string;
   notes: string;
   createdAt: string;
   /** Resolved by the API, so a table need not fetch every patient to name one. */

@@ -747,6 +747,11 @@ class Vitals(Base):
     lmp = Column(String, default="")  # ISO date
     edd = Column(String, default="")  # ISO date
     pog = Column(String, default="")
+    # "" (not asked/unknown) | "pregnant" | "not_pregnant" | "menopause".
+    # Gates whether EDD/POG are meaningful at all: LMP alone does not imply
+    # pregnancy, and a blank LMP does not imply menopause — both used to be
+    # silently inferred from the LMP field, which is wrong on both counts.
+    pregnancy_status = Column(String, default="")
     notes = Column(Text, default="")
     created_at = Column(String, nullable=False)
 

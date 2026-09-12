@@ -691,6 +691,7 @@ export interface VitalsCreateBody {
   lmp?: string;
   edd?: string;
   pog?: string;
+  pregnancyStatus?: string;
   notes?: string;
 }
 export interface RazorpaySettingsUpdate {

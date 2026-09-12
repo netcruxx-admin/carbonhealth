@@ -1837,6 +1837,7 @@ class VitalsUpdate(CamelModel):
     lmp: Optional[str] = None
     edd: Optional[str] = None
     pog: Optional[str] = None
+    pregnancy_status: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -1854,6 +1855,7 @@ class VitalsCreate(CamelModel):
     lmp: str = ""
     edd: str = ""
     pog: str = ""
+    pregnancy_status: str = ""
     notes: str = ""
 
 
@@ -1872,6 +1874,7 @@ class VitalsOut(OutModel):
     lmp: str = ""
     edd: str = ""
     pog: str = ""
+    pregnancy_status: str = ""
     notes: str = ""
     created_at: str
     # Resolved server-side, for the same reason as AppointmentOut.
